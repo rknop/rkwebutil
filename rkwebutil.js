@@ -62,6 +62,43 @@ rkWebUtil.button = function( parent, title, callback )
 }
 
 // **********************************************************************
+// items is a list of names; put in "-" for a HR.
+// callbacks is a dict of functions that map names to callback functions.
+// classes is a list of css classes for the div
+
+rkWebUtil.popupMenu = function( items, callbacks, classes, title=null, titleclasses=[], hrclasses=[] ) {
+    var menu = rkWebUtil.elemaker( "div", document.body, { "classes": classes } );
+    if ( title != null ) {
+        rkWebUtil.elemaker( "div", menu, { "text": title, "classes": titleclasses } );
+    }
+    for ( let item of items ) {
+        if ( item == "-" ) {
+            rkWebUtil.elemaker( "hr", menu, { "classes": hrclasses } );
+        }
+        else {
+            if ( callbacks.hasOwnProperty( item ) ) {
+                rkWebUtil.button( menu, item,
+                                  function( e ) {
+                                      callbacks[item]( e );
+                                      menu.style.visibility = "hidden";
+                                      e.stopPropagation();
+                                  } );
+            } else {
+                rkWebUtil.button( menu, item,
+                                  function( e ) {
+                                      menu.style.visibility = "hidden";
+                                      e.stopPropagation();
+                                  } );
+            }
+        }
+    }
+    menu.addEventListener( "mouseleave", function() { menu.style.visibility = "hidden"; } );
+                               
+    return menu;
+}
+
+
+// **********************************************************************
 // If I ever get a date that doesn't start "2020-07-15 07:42:00" (with
 // any old character in place of the space), I'm in trouble.  Alas,
 // I haven't found a reliable library routine to do this, because
@@ -158,6 +195,23 @@ rkWebUtil.hideOrShow = function( widget, parameter, hideparams, showparams, disp
         window.alert( "Programmer error: rkWebUtil.hideOrShow unknown parameter " + parameter );
     }
 }
+
+// **********************************************************************
+
+rkWebUtil.arrayBufferToB64 = function ( buffer ) {
+    // I cannot freaking believe that javascript wants you to read files to
+    //  an ArrayBuffer, but then it doesn't have a btoa function that can
+    //  eat an ArrayBuffer and produce base64 encoded stuff.
+    let bytebuffer = new Uint8Array( buffer )
+    let nbytes = bytebuffer.byteLength;
+    let blob = '';
+    for ( let i = 0 ; i < nbytes ; i += 1 ) {
+        blob += String.fromCharCode( bytebuffer[i] );
+    }
+    let b64data = btoa( blob )
+    return b64data;
+}
+
 
 // **********************************************************************
 // **********************************************************************
