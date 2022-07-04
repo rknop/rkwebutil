@@ -212,6 +212,14 @@ rkWebUtil.arrayBufferToB64 = function ( buffer ) {
     return b64data;
 }
 
+// **********************************************************************
+
+rkWebUtil.colorIntToCSSColor = function( colint ) {
+    let r = Math.floor( colint / (65536) );
+    let g = Math.floor( ( colint - r * 65536 ) / 256 );
+    let b = colint - r * 65536 - g * 256;
+    return '#' + r.toString(16).padStart(2,'0') + g.toString(16).padStart(2,'0') + b.toString(16).padStart(2,'0');
+}
 
 // **********************************************************************
 // **********************************************************************
