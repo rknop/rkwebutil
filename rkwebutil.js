@@ -16,11 +16,12 @@ rkWebUtil.wipeDiv = function( div )
 
 rkWebUtil.elemaker = function( elemtype, parent, inprops )
 {
-    var props = { text: null, dblclick: null, click: null, classes: null, attributes: null };
+    var props = { text: null, dblclick: null, click: null, change:null, classes: null, attributes: null };
     Object.assign( props, inprops );
     var text = props.text
     var click = props.click;
     var dblclick = props.dblclick;
+    var change = props.change;
     var classes = props.classes;
     var attributes = props.attributes;
 
@@ -34,6 +35,8 @@ rkWebUtil.elemaker = function( elemtype, parent, inprops )
         elem.addEventListener( "click", click );
     if ( dblclick != null )
         elem.addEventListener( "dblclick", dblclick );
+    if ( change != null )
+        elem.addEventListener( "change", change );
     if ( classes != null ) {
         for ( let classname of classes ) {
             elem.classList.add( classname )
