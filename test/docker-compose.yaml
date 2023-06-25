@@ -1,0 +1,96 @@
+version: "3.3"
+
+services:
+  postgres:
+    image: rknop/rkwebutil_test_postgres
+    build:
+      context: docker_postgres
+    healthcheck:
+      test: netcat -w 1 localhost 5432 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  createdb:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    image: rknop/rkwebutil_test_webserver
+    build:
+      context: docker_webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    entrypoint:
+      - /bin/bash
+      - -c
+      - python3 /tmp/createdb.py
+
+  makeinstall:
+    image: rknop/rkwebutil_test_webserver
+    build:
+      context: docker_webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    volumes:
+      - type: bind
+        source: ../
+        target: /rkwebutil_src
+      - type: bind
+        source: html_install
+        target: /var/www/html
+    entrypoint:      
+      - /bin/bash
+      - -c
+      - |
+        cp -p /rkwebutil_src/auth.py /var/www/html/
+        cp -p /rkwebutil_src/config.py /var/www/html/
+        cp -p /rkwebutil_src/example_db.py /var/www/html/
+        cp -p /rkwebutil_src/resetpasswd_start.js /var/www/html/
+        cp -p /rkwebutil_src/rkauth.js /var/www/html/
+        cp -p /rkwebutil_src/rkwebutil.js /var/www/html/
+
+  webserver:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      makeinstall:
+        condition: service_completed_successfully
+    image: rknop/rkwebutil_test_webserver
+    build:
+      context: docker_webserver
+    volumes:
+      - type: bind
+        source: html_install
+        target: /var/www/html
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+
+  shellhost:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      webserver:
+        condition: service_started
+    image: rknop/rkwebutil_test
+    build:
+      context: docker_test
+    volumes:
+      - type: bind
+        source: .
+        target: /tests
+      - type: bind
+        source: html_install
+        target: /var/www/html
+    entrypoint: [ "tail", "-f", "/etc/issue" ]
