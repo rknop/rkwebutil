@@ -45,7 +45,7 @@ import db
 #   module uses SQLAlchemy and implements the following classes.  (See
 #   example_db.py for a sample implementation.)
 #
-# DB
+# db.DB
 #   A class that as a static method get that takes one argument.
 #   If that argument is a DB object, just returns it, otherwise
 #   constructs a DB object and returns that.
@@ -56,7 +56,7 @@ import db
 #
 #   See example_db.py for an implementation I've used.
 #
-# AuthUser
+# db.AuthUser
 #   properties: id UUID
 #               username TEXT
 #               displayname TEXT
@@ -69,7 +69,7 @@ import db
 #             getbyusername( name, curdb=None ) -> SQLAlchmey Query object (sequence of AuthUser objects)
 #             getbyemail( email, curdb=None ) -> SQLAlchemy Query obejct (sequence of AuthUser objects)
 
-# PasswordLink
+# db.PasswordLink
 #   properties: id UUID
 #               userid UUID with foreign key link to AuthUser.id
 #               expires TIMESTAMP WITH TIME ZONE
@@ -105,7 +105,8 @@ import db
 #
 # (Won't work with web.py templates, see https://webpy.org/cookbook/sessions_with_subapp )
 #
-# CLIENT SIDE: use rkauth.js and resetpasswd_start.js
+# CLIENT SIDE: use rkauth.js and resetpasswd_start.js.  rkauth.js includes aes.js and jsencrypt.min.js.
+# It assumes that there are css classes "link" and "center" defined.
 
 # ======================================================================
 
