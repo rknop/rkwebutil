@@ -35,7 +35,7 @@ class HandlerBase(object):
         web.header( 'Content-Type', 'text/html; charset="UTF-8"' )
         webapdirurl = str( pathlib.Path( web.ctx.homepath ).parent )
         # This is annoying
-        webaapdirurl += "/" if webapdirurl[-1] != "/" else ""
+        webapdirurl += "/" if webapdirurl[-1] != "/" else ""
         self.response = "<!DOCTYPE html>\n"
         self.response += "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
         self.response += "<title>RKWebutil Test</title>"
@@ -47,7 +47,7 @@ class HandlerBase(object):
         self.response += "<h1>RKWebUtil Auth Test</h1>\n"
         self.response += "<div id=\"status-div\" name=\"status-div\"></div>\n"
         
-    def htmlbottom)( self ):
+    def htmlbottom( self ):
         self.response += "</body>\n</html>\n"
 
 # ======================================================================
@@ -90,7 +90,7 @@ application = app.wsgifunc()
 def main():
     global app
     sys.stderr.write( "Running webapp.\n" )
-    sys.stderr.flusn()
+    sys.stderr.flush()
     app.run()
 
 if __name__ == "__main__":
