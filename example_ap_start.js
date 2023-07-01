@@ -10,7 +10,7 @@ exampleap.init_interval = window.setInterval(
                 exampleap.started = true;
                 window.clearInterval( exampleap.init_interval );
                 renderer = new exampleap();
-                exampleap.init();
+                renderer.init();
             }
         }
     },

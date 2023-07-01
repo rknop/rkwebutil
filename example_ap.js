@@ -1,9 +1,9 @@
 import { rkAuth } from "./rkauth.js"
 import { rkWebUtil } from "./rkwebutil.js"
 
-webapurl = "/example_ap.py/";
+var webapurl = "/example_ap.py/";
 
-exampleap = function() {}
+var exampleap = function() {}
 
 exampleap.prototype.init = function() {
     var self = this;
@@ -57,4 +57,4 @@ exampleap.prototype.show_or_prompt_login = function() {
     
 // **********************************************************************
 
-export { example_ap }
+export { exampleap }

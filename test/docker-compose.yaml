@@ -50,12 +50,15 @@ services:
       - /bin/bash
       - -c
       - |
+        cp -p /rkwebutil_src/aes.js /var/www/html
         cp -p /rkwebutil_src/auth.py /var/www/html/
         cp -p /rkwebutil_src/config.py /var/www/html/
+        cp -p /rkwebutil_src/example_ap.css /var/www/html/
         cp -p /rkwebutil_src/example_ap.py /var/www/html/
         cp -p /rkwebutil_src/example_ap.js /var/www/html/
         cp -p /rkwebutil_src/example_ap_start.js /var/www/html/
         cp -p /rkwebutil_src/example_db.py /var/www/html/db.py
+        cp -p /rkwebutil_src/jsencrypt.min.js /var/www/html/
         cp -p /rkwebutil_src/resetpasswd_start.js /var/www/html/
         cp -p /rkwebutil_src/rkauth.js /var/www/html/
         cp -p /rkwebutil_src/rkwebutil.js /var/www/html/
