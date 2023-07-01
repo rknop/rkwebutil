@@ -74,6 +74,8 @@ import db
 #               userid UUID with foreign key link to AuthUser.id
 #               expires TIMESTAMP WITH TIME ZONE
 #
+# IN YOUR WEBAP ... see example_ap.py for an example
+#
 # Add the module as a submodule to your main webap; the code there needs:
 #
 # import auth
