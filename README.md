@@ -1,6 +1,10 @@
 # rkwebutil
 
-Javascript utilities, and an auth system for web aps written with web.py and using postgres.
+Several utilities useful for web applications (and maybe some other things):
+
+* rkwebutil.js : a set of random javascript routines I use myself
+* config.py : a python config system that reads yaml files which can override each other
+* rkauth : an authentication system for webaps using web.py, SQLAlchmey, and Postgres
 
 To be made available under the MIT license, once I get my ducks in a row.
 
@@ -10,5 +14,5 @@ To be made available under the MIT license, once I get my ducks in a row.
 
 ### License info
 
-Uses `aes.js` from CryptoJS 3.1.2 by Jeff Mott, MIT license
-Uses `jsencrypt.min.js` by Kenji Urshima, MIT License (see `jsencrypt.min.js.LICENSE.txt`)
+* Uses `aes.js` from CryptoJS 3.1.2 by Jeff Mott, MIT license
+* Uses `jsencrypt.min.js` by Kenji Urshima, MIT License (see `jsencrypt.min.js.LICENSE.txt`)
