@@ -10,7 +10,13 @@ if str(_dir) not in sys.path:
     sys.path.append( str(_dir) )
 
 import db
+# In reality, you don't want to hardcode passwords, and you want to read this
+#   from some kind of config.  This is here for the automated tests.
+db.DB.setdbparams( 'postgres', 'fragile', 'postgres', 5432, 'test_rkwebutil' )
 import auth
+# Another thing you want to read from some kind of config.
+auth.RKAuthConfig.email_from = 'rkwebutil test <nobody@nowhere.org>'
+auth.RKAuthConfig.email_subject = 'rkwebutil test password reset'
 
 # ======================================================================
 
@@ -68,6 +74,9 @@ urls = (
     '/',     "FrontPage",
     '/auth', auth.app
 )
+
+web.config.smtp_server = 'mailhog'
+web.config.smtp_port = 1025
 
 app = web.application( urls, locals() )
 web.config.session_parameters[ "samesite" ] = "lax"

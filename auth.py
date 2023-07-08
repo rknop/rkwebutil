@@ -35,6 +35,16 @@ scriptpath = pathlib.Path( __file__ )
 sys.path.insert( 0, str(scriptpath.parent) )
 import db
 
+class RKAuthConfig:
+    """Global rkauth config.
+
+    After importing auth, reset these two variables to what you want to
+    see in the header of the "reset password" emails.
+
+    """
+    email_from = 'RKAuth <nobody@nowhere.org>'
+    email_subject = 'RKAuth password reset'
+
 #### HOW TO USE
 #
 # This is for a webap built with web.py
@@ -216,7 +226,7 @@ class GetPasswordResetLink(HandlerBase):
             sentto = ""
             for user in them:
                 link = db.PasswordLink.new( user.id )
-                web.sendmail( "DECat Webap <raknop@lbl.gov>", user.email, "DECat webap password reset",
+                web.sendmail( RKAuthConfig.email_from, user.email, RKAuthConfig.email_subject,
                               f'Somebody requested a password reset for {user.username}\n' +
                               f'for the LBL DECat Webap.  This link will expire in 1 hour.\n'
                               f'If you did not request this, you may ignore this message.\n' +

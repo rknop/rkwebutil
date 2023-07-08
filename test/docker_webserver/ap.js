@@ -57,4 +57,4 @@ exampleap.prototype.show_or_prompt_login = function() {
     
 // **********************************************************************
 
-export { exampleap }
+export { exampleap, webapurl }

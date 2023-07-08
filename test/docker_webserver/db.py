@@ -210,3 +210,11 @@ class PasswordLink(Base):
             db.db.commit()
             return link
 
+    @classmethod
+    def get( cls, uuid, curdb=None ):
+        with DB.get(curdb) as dbo:
+            q = dbo.db.query( PasswordLink ).filter( PasswordLink.id==uuid )
+            if q.count() == 0:
+                return None
+            else:
+                return q.first()

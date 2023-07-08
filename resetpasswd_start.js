@@ -1,9 +1,9 @@
 import { rkAuth } from "./rkauth.js"
 
 // ****
-// Set the variable webapurl
-import { PhotoDB } from "./photodb.js"
-var webapurl = PhotoDB.webapurl;
+// Edit this!
+// What's here is what's needed for the automated tests
+import { webapurl } from "./ap.js"
 // ****
 
 rkAuth.started = false;
