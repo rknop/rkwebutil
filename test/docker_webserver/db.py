@@ -64,7 +64,7 @@ class DB(object):
         has the same SQLAlchemy session as the passed DB object.
 
         """
-        if db is None:
+        if dbo is None:
             return DB()
         else:
             return DB( dbo.db )

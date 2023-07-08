@@ -1,7 +1,7 @@
 import { rkAuth } from "./rkauth.js"
 import { rkWebUtil } from "./rkwebutil.js"
 
-var webapurl = "/example_ap.py/";
+var webapurl = "/ap.py/";
 
 var exampleap = function() {}
 

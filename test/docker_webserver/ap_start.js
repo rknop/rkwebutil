@@ -1,4 +1,4 @@
-import { exampleap } from "./example_ap.js";
+import { exampleap } from "./ap.js";
 
 exampleap.started = false;
 exampleap.init_interval = window.setInterval(

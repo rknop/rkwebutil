@@ -20,10 +20,10 @@ RUN pip3 install \
 
 COPY ports.conf /etc/apache2/
 COPY 000-default.conf /etc/apache2/sites-available/
-COPY wsgi.conf.patch /tmp/
-RUN patch /etc/apache2/mods-available/wsgi.conf /tmp/wsgi.conf.patch
+COPY wsgi.conf.patch /usr/src/
+RUN patch /etc/apache2/mods-available/wsgi.conf /usr/src/wsgi.conf.patch
 
-COPY createdb.py /tmp/
+COPY createdb.py /usr/src
 
 RUN apachectl start
 
