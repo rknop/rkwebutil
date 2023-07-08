@@ -44,7 +44,9 @@ class RKAuthConfig:
     """
     email_from = 'RKAuth <nobody@nowhere.org>'
     email_subject = 'RKAuth password reset'
-
+    email_system_name = 'a webserver using the RKAuth system'
+    webap_url = None
+    
 #### HOW TO USE
 #
 # This is for a webap built with web.py
@@ -226,12 +228,16 @@ class GetPasswordResetLink(HandlerBase):
             sentto = ""
             for user in them:
                 link = db.PasswordLink.new( user.id )
+                if RKAuthConfig.webap_url is None:
+                    webap_url = web.ctx.home
+                else:
+                    webap_url = RKAuthConfig.webap_url
                 web.sendmail( RKAuthConfig.email_from, user.email, RKAuthConfig.email_subject,
                               f'Somebody requested a password reset for {user.username}\n' +
-                              f'for the LBL DECat Webap.  This link will expire in 1 hour.\n'
+                              f'for {RKAuthConfig.email_system_name}.  This link will expire in 1 hour.\n\n'
                               f'If you did not request this, you may ignore this message.\n' +
                               f'Here is the link; cut and paste it into your browser:\n\n' +
-                              f'{web.ctx.home}/resetpassword?uuid={str(link.id)}' )
+                              f'{webap_url}/resetpassword?uuid={str(link.id)}' )
                 if len(sentto) > 0:
                     sentto += " "
                 sentto += user.username

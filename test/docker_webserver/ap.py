@@ -17,6 +17,8 @@ import auth
 # Another thing you want to read from some kind of config.
 auth.RKAuthConfig.email_from = 'rkwebutil test <nobody@nowhere.org>'
 auth.RKAuthConfig.email_subject = 'rkwebutil test password reset'
+auth.RKAuthConfig.email_system_name = 'the rkwebutil test webserver'
+auth.RKAuthConfig.webap_url = 'http://webserver:8080/ap.py/auth'
 
 # ======================================================================
 
