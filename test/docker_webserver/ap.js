@@ -14,7 +14,9 @@ exampleap.prototype.init = function() {
         window.alert( "Couldn't find status div!  This should never happen." );
         return;
     }
-    this.auth = new rkAuth( this.statusdiv, webapurl, function() { self.render() } );
+    this.auth = new rkAuth( this.statusdiv, webapurl,
+                            function() { self.render(); },
+                            function() { window.location.reload(); } );
     this.auth.checkAuth();
 }
 
@@ -23,12 +25,12 @@ exampleap.prototype.init = function() {
 
 exampleap.prototype.render = function() {
     this.show_or_prompt_login();
-    rkWebUtil.wipediv( this.maindiv );
+    rkWebUtil.wipeDiv( this.maindiv );
     if ( ! this.auth.authenticated ) {
-        rkWebUtil.elemaker( "p", this.maindiv, "Not logged in." );
+        rkWebUtil.elemaker( "p", this.maindiv, { "text": "Not logged in." } );
     }
     else {
-        rkWebUtil.elemaker( "p", this.maindiv, "Hello world." );
+        rkWebUtil.elemaker( "p", this.maindiv, { "text": "Hello world." } );
     }
 }
 
@@ -45,7 +47,7 @@ exampleap.prototype.show_or_prompt_login = function() {
                             { "classes": [ "link" ],
                               "text": "Log Out",
                               "click": function() {
-                                  self.auth.logout( function() { self.render(); } )
+                                  self.auth.logout( function() { window.location.reload(); } )
                               }
                             }
                           );

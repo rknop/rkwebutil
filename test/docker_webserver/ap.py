@@ -32,8 +32,11 @@ class HandlerBase(object):
     def POST( self, *args, **kwags ):
         return self.do_the_things( *args, **kwargs )
 
+    def isauthenticated( self ):
+        return hasattr( web.ctx.session, "authenticated" ) and web.ctx.session.authenticated
+
     def verifyauth( self ):
-        if ( not hasattr( web.ctx.session, "authenticated" ) ) or ( not web.ctx.session.authenticated ):
+        if not self.isauthenticated():
             raise RuntimeError( "User not authenticated" )
 
     def jsontop( self ):
@@ -65,7 +68,14 @@ class HandlerBase(object):
 class FrontPage(HandlerBase):
     def do_the_things( self ):
         self.htmltop()
-        self.response += "<div id=\"main-div\">\n</div>\n"
+        if self.isauthenticated():
+            self.response += "<h2>Logged in</h2>\n"
+            self.response += f"<p>You are logged in as {web.ctx.session.username} ({web.ctx.session.userdisplayname})</p>\n"
+        else:
+            self.response += "<h2>Not Logged In</h2>\n"
+            self.response += "<p>Log in to continue.</p>\n"
+        self.response += "<div id=\"main-div\">\n"
+        self.response += "</div>\n"
         self.htmlbottom()
         return self.response
 

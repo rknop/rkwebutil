@@ -30,7 +30,8 @@ import { rkWebUtil } from "./rkwebutil.js"
 // * There is a div (passed to the constructor) that rkAuth can do whatever it wants to
 // * CSS classes .link and .center are defined
 
-var rkAuth = function( authdiv, webapurl, finishlogincallback, notauthcallback=null, errorhandler=null ) {
+var rkAuth = function( authdiv, webapurl, isauthcallback,
+                       finishlogincallback=null, notauthcallback=null, errorhandler=null ) {
     /** Handle authentication with auth.py server side
      *
      * Make one of these.  Pass it a div it can do whatever the hell it
@@ -40,7 +41,7 @@ var rkAuth = function( authdiv, webapurl, finishlogincallback, notauthcallback=n
      *
      * Call the object's checkAuth method with a callback to call if authenticated,
      * and one to call if not.  If isauthcallback is null, it'll call the
-     * finishlogicallback passed to the constructor.  If isnotauthcallback
+     * isauthcallback passed to the constructor.  If isnotauthcallback
      * is null, it'll call showLoginUI.
      *
      * The object will have properties:
@@ -53,14 +54,28 @@ var rkAuth = function( authdiv, webapurl, finishlogincallback, notauthcallback=n
      *    userdisplayname
      *
      * Also needed: resetpasswd_start.js
-     * **** Must edit that one to set webapurl **** (sad)
+     *
+     * Parameters:
+     *
+     * authdiv - the div that rkauth.js can do whatever the hell it wants with
+     * webapurl - the URL of the main web application (can be relative to server base)
+     * isauthcallback - a function to call if the user is already logged in
+     * finishlogincallback - a function to call when the user clicks "Log In" and the username/password
+     *    is right.  By default, calls isauthcallback
+     * notauthcallback - a function to call if the user is not authenticated.  By default,
+     *    shows the login UI (which is usually what you want!)
+     * errorhandler - a function to call if there's an error.  By default, shows an alert.
      */
 
     var self = this;
     
     this.authdiv = authdiv;
     this.webapurl = webapurl;
-    this.finishlogincallback = finishlogincallback;
+    this.isauthcallback = isauthcallback;
+    if ( finishlogincallback != null )
+        this.finishlogincallback = finishlogincallback;
+    else
+        this.finishlogincallback = this.isauthcallback;
     if ( notauthcallback != null )
         this.notauthcallback = notauthcallback;
     else
@@ -124,7 +139,7 @@ rkAuth.prototype.processCheckAuth = function( statedata, isauthcallback, isnotau
         if ( isauthcallback != null )
             isauthcallback();
         else
-            this.finishlogincallback();
+            this.isauthcallback();
     }
     else {
         this.authenticated = false;
@@ -246,7 +261,7 @@ rkAuth.prototype.processChallengeResponse = function( retdata ) {
             this.errorhandler( retdata )
         }
         else {
-            window.alert( 'Challgene response returned error: ' + retdata.error );
+            window.alert( 'Challenge response returned error: ' + retdata.error );
         }
         return
     }

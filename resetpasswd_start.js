@@ -1,10 +1,13 @@
 import { rkAuth } from "./rkauth.js"
 
-// ****
-// Edit this!
-// What's here is what's needed for the automated tests
-import { webapurl } from "./ap.js"
-// ****
+const urlmatch = new RegExp( '^(.*)(/[^/]+/)auth/resetpassword\\?uuid=[0-9a-f\-]+$' )
+var loc = String( window.location );
+var match = String(window.location).match( urlmatch );
+if ( match == null ) {
+    window.alert( "Error!  Failed to parse URL" );
+    die( "Reset password broken." );
+}
+const webapurl = match[2];
 
 rkAuth.started = false;
 rkAuth.init_interval = window.setInterval(
