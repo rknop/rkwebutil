@@ -153,6 +153,8 @@ class GetAuthChallenge(HandlerBase):
                     return json.dumps( { 'error': f'No such user {inputdata["username"]}' } )
                 user = users[0]
             tmpuuid = str( uuid.uuid4() )
+            if user.pubkey is None:
+                return json.dumps( { 'error': f'User {inputdata["username"]} does not have a password set yet.' } )
             pubkey = Cryptodome.PublicKey.RSA.importKey( user.pubkey )
             cipher = Cryptodome.Cipher.PKCS1_v1_5.new( pubkey )
             challenge = binascii.b2a_base64( cipher.encrypt( tmpuuid.encode("UTF-8") ) ).decode( "UTF-8" )

@@ -66,9 +66,10 @@ def waitforresetemailsent( browser ):
         return None
 
 @pytest.fixture(scope='module')
-def password_reset_link( browser, click_password_reset ):
+def password_reset_link( database, browser, click_password_reset ):
     statusdiv = browser.find_element( By.ID, 'status-div' )
     username = statusdiv.find_element( By.ID, 'login_username' )
+    username.clear()
     username.send_keys( 'test' )
     click_password_reset.click()
     p = WebDriverWait( browser, timeout=10 ).until( waitforresetemailsent )
@@ -91,10 +92,15 @@ def password_reset_link( browser, click_password_reset ):
     match = re.search( "^Somebody requested.*(http://webserver:8080/ap.py/auth/resetpassword\?uuid=[0-9a-f\-]+)$",
                        body, flags=re.DOTALL )
     assert match is not None
-    return match.group( 1 )
+
+    yield match.group( 1 )
+
+    cursor = database.cursor()
+    cursor.execute( "DELETE FROM passwordlink" )
+    database.commit()
     
 @pytest.fixture(scope='module')
-def reset_password( browser, password_reset_link ):
+def reset_password( database, browser, password_reset_link ):
     browser.get( password_reset_link )
     el = WebDriverWait( browser, timeout=10 ).until( lambda d: d.find_element(By.ID, 'resetpasswd_linkid' ) )
     assert el.get_attribute('name') == 'linkuuid'
@@ -102,7 +108,9 @@ def reset_password( browser, password_reset_link ):
     pw = browser.find_element( By.ID, 'reset_password' )
     conf = browser.find_element( By.ID, 'reset_confirm_password' )
     button = browser.find_element( By.ID, 'setnewpassword_button' )
+    pw.clear()
     pw.send_keys( 'gratuitous' )
+    conf.clear()
     conf.send_keys( 'gratuitous' )
     # I don't know why, but the alert timeout expired if I didn't sleep before clicking
     time.sleep(1)
@@ -111,6 +119,12 @@ def reset_password( browser, password_reset_link ):
     assert alert.text == 'Password changed'
     alert.dismiss()
 
+    yield True
+
+    cursor = database.cursor()
+    cursor.execute( "UPDATE authuser SET pubkey=NULL,privkey=NULL WHERE username='test'" )
+    database.commit()
+    
 def lookforloggedin( browser ):
     try:
         statusdiv = browser.find_element( By.ID, 'status-div' )
@@ -121,6 +135,12 @@ def lookforloggedin( browser ):
             return None
     except Exception as ex:
         return None
+
+@pytest.fixture(scope='module')
+def get_frontpage_after_reset_password( browser, reset_password ):
+    browser.get( "http://webserver:8080/ap.py/" )
+    el = WebDriverWait( browser, timeout=10 ).until( lambda d: d.find_element(By.CLASS_NAME, 'link') )
+    assert el.text == 'Request Password Reset'
     
 @pytest.fixture(scope='module')
 def login( browser ):
@@ -131,8 +151,20 @@ def login( browser ):
     username = statusdiv.find_element( By.ID, 'login_username' )
     password = statusdiv.find_element( By.ID, 'login_password' )
     button = statusdiv.find_element( By.TAG_NAME, 'button' )
+    username.clear()
     username.send_keys( 'test' )
+    password.clear()
     password.send_keys( 'gratuitous' )
     time.sleep( 1 )
     button.click()
     el = WebDriverWait( browser, timeout=10 ).until( lookforloggedin )
+
+@pytest.fixture(scope='module')
+def logout( browser, login ):
+    statusdiv = browser.find_element( By.ID, 'status-div' )
+    p = statusdiv.find_element( By.TAG_NAME, 'p' )
+    span = statusdiv.find_element( By.TAG_NAME, 'span' )
+    span.click()
+    # This is overkill, but give it time to go through the whole reload
+    # I should probably put a wait after this, but, eh.
+    time.sleep(5)

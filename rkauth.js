@@ -227,6 +227,10 @@ rkAuth.prototype.processChallenge = function( retdata, password ) {
     var self = this;
     var rsadecrypt, privkey, response, requestdata;
 
+    if ( retdata.hasOwnProperty( "error" ) ) {
+        this.errorhandler( { 'error': retdata.error } );
+        return;
+    }
     if ( ( ! retdata.hasOwnProperty( "privkey" ) ) ||
          ( ! retdata.hasOwnProperty( "challenge" ) ) ) {
         this.errorhandler( { 'error': 'Unexpected reseponse from server password challenge; things are broken.' } );
