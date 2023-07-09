@@ -6,7 +6,7 @@ Several utilities useful for web applications (and maybe some other things):
 * config.py : a python config system that reads yaml files which can override each other
 * rkauth : an authentication system for webaps using web.py, SQLAlchmey, and Postgres
 
-To be made available under the MIT license, once I get my ducks in a row.
+rkwebutil is (c) 2023 by Robert Knop, and is available under the GNU GPL v3 (see gpl-3.0.txt).
 
 ---
 

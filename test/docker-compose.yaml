@@ -100,3 +100,22 @@ services:
         source: html_install
         target: /var/www/html
     entrypoint: [ "tail", "-f", "/etc/issue" ]
+
+  runtests:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      webserver:
+        condition: service_started
+    image: rknop/rkwebutil_test
+    build:
+      context: docker_test
+    volumes:
+      - type: bind
+        source: .
+        target: /tests
+      - type: bind
+        source: html_install
+        target: /var/www/html
+    working_dir: /tests
+    entrypoint: [ "pytest", "-v" ]

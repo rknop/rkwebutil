@@ -49,13 +49,22 @@ class RKAuthConfig:
     
 #### HOW TO USE
 #
-# This is for a webap built with web.py
+# This is for a webap built with web.py and a database built with SQLAlchemy.
 #
-# This isn't as modular as I'd like.  Right now, it makes the assumption
-#   that there's a module in db.py either in the current directory, or
-#   the parent directory, of the directory where this file lives.  That
-#   module uses SQLAlchemy and implements the following classes.  (See
-#   example_db.py for a sample implementation.)
+# It isn't quite as modular as I'd like; it makes a bunch of assumptions
+# about stuff that you've done somewhere other than what's in the code
+# here.  An example of this may be found in test/docker_webserver.
+# Relevant files there are:
+#    db.py - the SQLAlchemy database
+#    ap.py - the web ap; see the other config files there for how it's hooked up via WSGI
+#    ap.js - the client side of the web ap
+#    ap_start.js - the rest of the client side of the web ap
+#    ap.css - a very little bit of css for the web ap
+#
+# 1. DEFINE THE DATABASE
+#
+# It assumes there's module db.py that defines an SQLAlchemy database
+# with the following classes:
 #
 # db.DB
 #   A class that as a static method get that takes one argument.
@@ -65,8 +74,6 @@ class RKAuthConfig:
 #   Has methods __enter__(self) and __exit__(self, exc_type, exc_val, exc_tb),
 #   where the latter one "does the right thing" in terms of closing the
 #   DB object, or decrementing its use count.
-#
-#   See example_db.py for an implementation I've used.
 #
 # db.AuthUser
 #   properties: id UUID
@@ -80,34 +87,38 @@ class RKAuthConfig:
 #   methods : get( uuid, curdb=None ) -> AuthUser object
 #             getbyusername( name, curdb=None ) -> SQLAlchmey Query object (sequence of AuthUser objects)
 #             getbyemail( email, curdb=None ) -> SQLAlchemy Query obejct (sequence of AuthUser objects)
-
+#
 # db.PasswordLink
 #   properties: id UUID
 #               userid UUID with foreign key link to AuthUser.id
 #               expires TIMESTAMP WITH TIME ZONE
 #
-# IN YOUR WEBAP ... see example_ap.py for an example
+# 2. IN YOUR WEBAP
 #
-# Add the module as a submodule to your main webap; the code there needs:
+# Add the module as a submodule to your main webap.  At the top, you must
+#    import auth
+# Immediately after that, configure the class variables in
+# auth.RKAuthConfig.  (These are used when constructing "reset password"
+# emails.)
 #
-# import auth
-# ...
-# urls = ( ...
-#          "/auth", auth.app
-#        )
-# ...
-# app = web.application( urls, locals() )
-# ...
-# initializer = { ... }
-# initializer.update( auth.initializer )
-# session = web.session.Session( app, web.session.DiskStore(...), initalizer=initializer )
-# def session_hook(): web.ctx.session = session 
-# app.add_processor( web.loadhook( session_hook ) ) 
+# Near the bottom of your webap:
+#
+#    urls = ( ...
+#             "/auth", auth.app
+#           )
+#    ...
+#    app = web.application( urls, locals() )
+#    ...
+#    initializer = { ... }
+#    initializer.update( auth.initializer )
+#    session = web.session.Session( app, web.session.DiskStore(...), initalizer=initializer )
+#    def session_hook(): web.ctx.session = session 
+#    app.add_processor( web.loadhook( session_hook ) ) 
 #
 # web.smtp also needs to be fully configured
 #
-# Access the session via web.ctx.session
-# Variables in the session:
+# In your webap, you can find out if the user has been authenticated by
+# accessing the session via web.ctx.session. Variables in the session:
 #    authenticated : True or False
 #    useruuid
 #    username
@@ -117,8 +128,15 @@ class RKAuthConfig:
 #
 # (Won't work with web.py templates, see https://webpy.org/cookbook/sessions_with_subapp )
 #
-# CLIENT SIDE: use rkauth.js and resetpasswd_start.js.  rkauth.js includes aes.js and jsencrypt.min.js.
-# It assumes that there are css classes "link" and "center" defined.
+# 3. CLIENT SIDE:
+#
+# use rkauth.js and resetpasswd_start.js.  rkauth.js includes aes.js and
+# jsencrypt.min.js.  It assumes that there are css classes "link" and
+# "center" defined.  When you start up the javascript of your web
+# application, instantiate a rkUath, and then call checkAuth() on that
+# instance at the end of your initialization; use the callbacks you
+# passed to the constructor to do the rest of your rendering.  See the
+# example in tests/docker_webserver for an example.
 
 # ======================================================================
 
