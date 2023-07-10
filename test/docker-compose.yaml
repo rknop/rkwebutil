@@ -50,12 +50,14 @@ services:
         source: ../
         target: /rkwebutil_src
       - type: bind
-        source: html_install
+        source: test_install/html
         target: /var/www/html
     entrypoint:      
       - /bin/bash
       - -c
-      - make -C /rkwebutil_src/test/docker_webserver install
+      - |
+        make -C /rkwebutil_src/test/docker_webserver install
+        make -C /rkwebutil_src/test/docker_flaskserver install
 
   mailhog:
     image: mailhog/mailhog:latest
@@ -75,7 +77,7 @@ services:
       context: docker_webserver
     volumes:
       - type: bind
-        source: html_install
+        source: test_install/html
         target: /var/www/html
     environment:
       DB_NAME: test_rkwebutil
@@ -86,11 +88,38 @@ services:
     ports:
       - "8080:8080"
 
+  flaskserver:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      makeinstall:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    image: rknop/webutil_test_flaskserver
+    build:
+      context: docker_flaskserver
+    volumes:
+      - type: bind
+        source: test_install/flask
+        target: /flask
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8081:8081"
+
+
   shellhost:
     depends_on:
       postgres:
         condition: service_healthy
       webserver:
+        condition: service_started
+      flaskserver:
         condition: service_started
     image: rknop/rkwebutil_test
     build:
@@ -102,9 +131,6 @@ services:
       - type: bind
         source: ../
         target: /rkwebutil_src
-      - type: bind
-        source: html_install
-        target: /var/www/html
     entrypoint: [ "tail", "-f", "/etc/issue" ]
 
   runtests:
@@ -112,6 +138,8 @@ services:
       postgres:
         condition: service_healthy
       webserver:
+        condition: service_started
+      flaskserver:
         condition: service_started
     image: rknop/rkwebutil_test
     build:
@@ -121,7 +149,7 @@ services:
         source: .
         target: /tests
       - type: bind
-        source: html_install
-        target: /var/www/html
+        source: test_install
+        target: /test_install
     working_dir: /tests
     entrypoint: [ "pytest", "-v" ]

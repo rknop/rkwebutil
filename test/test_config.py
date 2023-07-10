@@ -21,7 +21,7 @@ import pathlib
 import pytest
 
 _rundir = pathlib.Path(__file__).parent
-sys.path.insert(0, '/var/www/html' )
+sys.path.insert(0, '/test_install/html' )
 import config
 
 # A note about pytest: Things aren't completely sandboxed.  When I call
