@@ -163,7 +163,7 @@ class AuthUser(Base):
     email = sqlalchemy.Column( sqlalchemy.Text, nullable=False, index=True )
     pubkey = sqlalchemy.Column( sqlalchemy.Text )
     privkey = sqlalchemy.Column( sqlalchemy.Text )
-    lastlogin = sqlalchemy.Column( sqlalchemy.DateTime, default=None )
+    lastlogin = sqlalchemy.Column( sqlalchemy.DateTime(timezone=True), default=None )
     
     @classmethod
     def get( cls, id, curdb=None, cfg=None ):
@@ -195,7 +195,7 @@ class PasswordLink(Base):
 
     id = sqlalchemy.Column( sqlUUID(as_uuid=True), primary_key=True, default=uuid.uuid4 )
     userid = sqlalchemy.Column( sqlUUID(as_uuid=True), sqlalchemy.ForeignKey("authuser.id", ondelete="CASCADE"), index=True )
-    expires = sqlalchemy.Column( sqlalchemy.DateTime )
+    expires = sqlalchemy.Column( sqlalchemy.DateTime(timezone=True) )
     
     @classmethod
     def new( cls, userid, expires=None, curdb=None ):

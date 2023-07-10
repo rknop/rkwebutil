@@ -5,6 +5,12 @@ services:
     image: rknop/rkwebutil_test_postgres
     build:
       context: docker_postgres
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
     healthcheck:
       test: netcat -w 1 localhost 5432 || exit 1
       interval: 5s
