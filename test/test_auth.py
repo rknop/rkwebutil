@@ -116,7 +116,6 @@ class AuthTestBase:
     def reset_password( self, database, browser, password_reset_link ):
         browser.get( password_reset_link )
         time.sleep(3)
-        import pdb; pdb.set_trace()
         el = WebDriverWait( browser, timeout=10 ).until( lambda d: d.find_element(By.ID, 'resetpasswd_linkid' ) )
         assert el.get_attribute('name') == 'linkuuid'
         assert el.tag_name == 'input'

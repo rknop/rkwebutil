@@ -20,11 +20,11 @@
 
 import { rkAuth } from "./rkauth.js"
 
-const urlmatch = new RegExp( '^(.*)(/[^/]+/)auth/resetpassword\\?uuid=[0-9a-f\-]+$' )
+const urlmatch = new RegExp( '^(https?://[^/]*)?(.*)/auth/resetpassword\\?uuid=[0-9a-f\-]+$' )
 var loc = String( window.location );
 var match = String(window.location).match( urlmatch );
 if ( match == null ) {
-    window.alert( "Error!  Failed to parse URL" );
+    window.alert( "Error!  Failed to parse URL" + window.location );
     die( "Reset password broken." );
 }
 const webapurl = match[2];

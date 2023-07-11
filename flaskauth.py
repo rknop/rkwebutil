@@ -17,6 +17,7 @@
 
 import sys
 import pathlib
+import binascii
 import uuid
 import datetime
 import pytz
@@ -197,9 +198,9 @@ def resetpassword():
     # sys.stderr.write( f"In ResetPassword, webapdirurl is {webapdirurl}\n" )
     # response += "<link href=\"" + webapdirurl
     # response += "photodb.css\" rel=\"stylesheet\" type=\"text/css\">\n"
-    response += "<script src=\"" + webapdirurl + "aes.js\"></script>\n"
-    response += "<script src=\"" + webapdirurl + "jsencrypt.min.js\"></script>\n"
-    response += "<script src=\"" + webapdirurl + "resetpasswd_start.js\" type=\"module\"></script>\n"
+    response += "<script src=\"" + webapdirurl + "static/aes.js\"></script>\n"
+    response += "<script src=\"" + webapdirurl + "static/jsencrypt.min.js\"></script>\n"
+    response += "<script src=\"" + webapdirurl + "static/resetpasswd_start.js\" type=\"module\"></script>\n"
     response += "</head>\n<body>\n"
     response += f"<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n";
 
@@ -231,8 +232,8 @@ def resetpassword():
         response += "<button name=\"getnewpassword\" id=\"setnewpassword_button\">Set New Password</button>\n"
         response += "</td></tr>\n</table>\n"
         response += "</div>\n"
-        response += ( f"<input type=\"hidden\" name=\"linkuuid\" id=\"resetpasswd_linkid"
-                      f"value=\"str({pwlink.id})\">" )
+        response += ( f"<input type=\"hidden\" name=\"linkuuid\" id=\"resetpasswd_linkid\" "
+                      f"value=\"{str(pwlink.id)}\">" )
         response += "</body>\n</html>\n"
         return flask.make_response( response )
     except Exception as e:
@@ -248,13 +249,14 @@ def getkeys():
             return flask.jsonify( { 'error': '/auth/getkeys was expecting application/json' } )
         if 'passwordlinkid' not in flask.request.json:
             return flask.jsonify( { "error": "No password link id specified" } )
+        sys.stderr.write( f"flask.request.json['passwordlinkid'] is {flask.request.json['passwordlinkid']}\n" )
         link = db.PasswordLink.get( flask.request.json['passwordlinkid'] )
         if link is None:
             return flask.jsonify( { "error": "Invalid password link id" } )
         if link.expires < datetime.datetime.now(pytz.utc):
             return flask.jsonify( { "error": "Password reset link has expired" } )
         keys = Cryptodome.PublicKey.RSA.generate( 2048 )
-        return flask.jsonfiy( { "privatekey": keys.exportKey().decode("UTF-8"),
+        return flask.jsonify( { "privatekey": keys.exportKey().decode("UTF-8"),
                                 "publickey": keys.publickey().exportKey().decode("UTF-8") } )
     except Exception as e:
         sys.stderr.write( f'{traceback.format_exc()}\n' )
@@ -279,15 +281,15 @@ def changepassword():
             user.privkey = flask.request.json['privatekey']
             dbsess.db.delete( pwlink )
             dbsess.db.commit()
-            return flask.jsonfity( { "status": "Password changed" } )
+            return flask.jsonify( { "status": "Password changed" } )
     except Exception as e:
         sys.stderr.write( f'{traceback.format_exc()}\n' )
-        return json.jsonify( { 'error': f'Exception in ChangePassword: {str(e)}' } )
+        return flask.jsonify( { 'error': f'Exception in ChangePassword: {str(e)}' } )
 
 @bp.route( '/isauth', methods=['POST'] )
 def isauth():
     if ( 'authenticated' in flask.session ) and ( flask.session['authenticated'] ):
-        return flask.jsonfiy( { 'status': True,
+        return flask.jsonify( { 'status': True,
                                 'username': flask.session["username"],
                                 'useruuid': str( flask.session["useruuid"] ),
                                 'useremail': flask.session["useremail"],
