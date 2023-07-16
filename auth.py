@@ -176,6 +176,7 @@ class GetAuthChallenge(HandlerBase):
             pubkey = Cryptodome.PublicKey.RSA.importKey( user.pubkey )
             cipher = Cryptodome.Cipher.PKCS1_v1_5.new( pubkey )
             challenge = binascii.b2a_base64( cipher.encrypt( tmpuuid.encode("UTF-8") ) ).decode( "UTF-8" )
+            # sys.stderr.write( f"Setting session username={user.username}, id={user.id}\n" )
             web.ctx.session.username = user.username
             web.ctx.session.useruuid = user.id
             web.ctx.session.userdisplayname = user.displayname
@@ -203,8 +204,8 @@ class RespondAuthChallenge(HandlerBase):
                                                 ' (you probably can\'t fix this, contact code maintainer) '
                                                ) } )
             if inputdata['username'] != web.ctx.session.username:
-                return json.dumps( { 'error': ( f'username {username} didn\'t match session username '
-                                                '{web.ctx.session.username}; try logging out and logging back in '
+                return json.dumps( { 'error': ( f'username {inputdata["username"]} didn\'t match session username '
+                                                f'{web.ctx.session.username}; try logging out and logging back in '
                                                ) } )
             if web.ctx.session.authuuid != inputdata['response']:
                 return json.dumps( { 'error': 'Authentication failure.' } )

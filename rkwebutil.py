@@ -128,7 +128,7 @@ def asDateTime( string ):
     try:
         if string is None:
             return None
-        if isinstance( string, datetime ):
+        if isinstance( string, datetime.datetime ):
             return string
         dateval = dateutil.parser.parse( string )
         return dateval
