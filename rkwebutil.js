@@ -263,7 +263,7 @@ rkWebUtil.Connector = function( app )
 // errorhandler is a function that takes a single argument
 // that argument will have property "error" which is a string message
 
-rkWebUtil.Connector.prototype.waitForJSONResponse = function( request, errorhandler = null )
+rkWebUtil.Connector.prototype.waitForJSONResponse = function( request, errorhandler=null )
 {
     var type;
 
@@ -309,36 +309,50 @@ rkWebUtil.Connector.prototype.waitForJSONResponse = function( request, errorhand
 //              it will have one argument, the data from the request
 //   errorhandler -- a function that takes a single argument that will
 //                   have property "error" which is a string message
+//
+//   finalcall --  function that has takes no arguments that will always
+//                 be called (think "finally" from a try/catch/finally block).
 
-rkWebUtil.Connector.prototype.sendHttpRequest = function( appcommand, data, handler, errorhandler = null )
+
+rkWebUtil.Connector.prototype.sendHttpRequest = function( appcommand, data, handler, errorhandler=null, finalcall=null )
 {
     let self = this;
     let req = new XMLHttpRequest();
     req.open( "POST", this.app + appcommand );
-    req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler=errorhandler ) };
+    req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler=errorhandler,
+                                                                  finalcall=finalcall ) };
     req.setRequestHeader( "Content-Type", "application/json" );
     req.send( JSON.stringify( data ) );
 }
 
 rkWebUtil.Connector.prototype.sendHttpRequestMultipartForm = function( appcommand, formdata,
-                                                                       handler, errorhandler = null )
+                                                                       handler, errorhandler=null,
+                                                                       finalcall=null )
 {
     let self = this;
     let req = new XMLHttpRequest();
     req.open( "POST", this.app + appcommand );
-    req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler ) };
+    req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler, finalcall ) };
     req.send( formdata );
 }
 
-rkWebUtil.Connector.prototype.catchHttpResponse = function( req, handler, errorhandler = null )
+rkWebUtil.Connector.prototype.catchHttpResponse = function( req, handler, errorhandler=null, finalcall=null )
 {
-    if ( ! this.waitForJSONResponse( req, errorhandler ) ) return;
+    let jsonstate = this.waitForJSONResponse( req, errorhandler, finalcall );
+    if ( ( jsonstate == null ) && ( finalcall != null) ) {
+        finalcall();
+        return;
+    }
+    if ( !jsonstate ) return;
+    
     try {
         var statedata = JSON.parse( req.responseText );
     } catch (err) {
         window.alert( "Error parsing JSON! (" + err + ")" );
         console.trace();
         console.log( req.responseText );
+        if ( finalcall != null ) finalcall();
+        return;
     }
     if ( statedata.hasOwnProperty( "error" ) ) {
         if ( errorhandler != null ) {
@@ -347,9 +361,11 @@ rkWebUtil.Connector.prototype.catchHttpResponse = function( req, handler, errorh
         else {
             window.alert( 'Error return: ' + statedata.error );
         }
+        if ( finalcall != null ) finalcall();
         return;
     }
     handler( statedata );
+    if ( finalcall != null ) finalcall();
 }
 
 // **********************************************************************
