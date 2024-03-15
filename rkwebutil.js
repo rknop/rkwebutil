@@ -1,21 +1,21 @@
 /**
  * This file is part of rkwebutil
- * 
+ *
  * rkwebutil is Copyright 2023 by Robert Knop
- * 
+ *
  * rkwebutil is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
  * option) any later version.
- * 
+ *
  * rkwebutil is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
  * for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with rkwebutil. If not, see <https://www.gnu.org/licenses/>.
- * 
+ *
  */
 
 var rkWebUtil = {}
@@ -48,13 +48,32 @@ rkWebUtil.elemaker = function( elemtype, parent, inprops )
     var attr;
 
     var elem;
+
+    if ( elemtype == "text" ) {
+        if ( props.text == null )
+            throw "Must pass text in props to make a text node.";
+        if ( props.svg )
+            throw "Can't make text nodes with svg.";
+        if ( classes != null )
+            throw "Can't assign classes to text nodes (use a span).";
+        if ( click != null || change != null )
+            throw "Can't add events to text nodes (use a span)."
+        if ( attributes != null )
+            throw "Can't set attributes of text nodes (use a span).";
+
+        elem = document.createTextNode( props.text );
+        if ( parent != null ) parent.appendChild( elem );
+        return elem;
+    }
+
     if ( props.svg )
         elem = document.createElementNS( "http://www.w3.org/2000/svg", elemtype );
     else
         elem = document.createElement( elemtype );
+
     if ( parent != null) parent.appendChild( elem );
-    if ( text != null )
-        elem.appendChild( document.createTextNode( text ) );
+    if ( props.text != null ) elem.appendChild( document.createTextNode( props.text ) );
+
     if ( click != null )
         elem.addEventListener( "click", click );
     if ( dblclick != null )
@@ -120,7 +139,7 @@ rkWebUtil.popupMenu = function( items, callbacks, classes, title=null, titleclas
         }
     }
     menu.addEventListener( "mouseleave", function() { menu.style.visibility = "hidden"; } );
-                               
+
     return menu;
 }
 
@@ -348,7 +367,7 @@ rkWebUtil.Connector.prototype.catchHttpResponse = function( req, handler, errorh
         return;
     }
     if ( !jsonstate ) return;
-    
+
     try {
         var statedata = JSON.parse( req.responseText );
     } catch (err) {
