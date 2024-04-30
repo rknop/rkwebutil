@@ -440,22 +440,27 @@ rkWebUtil.Tabbed = function( parentdiv, params ) {
     this.tabs = [];
     this.buttons = {};
     this.divs = {};
+    this.focuscallbacks = {};
+    this.blurcallbacks = {};
 
     this.div = rkWebUtil.elemaker( "div", parentdiv, { "classes": [ this.tabdivcss ] } );
     this.buttonbox = rkWebUtil.elemaker( "div", this.div, { "classes": [ this.buttonboxdivcss ] } );
     this.tabcontentdiv = rkWebUtil.elemaker( "div", this.div, { "classes": [ this.tabcontentdivcss ] } );
 }
 
-rkWebUtil.Tabbed.prototype.addTab = function( tab, buttontext, div, sel=false )
+rkWebUtil.Tabbed.prototype.addTab = function( tab, buttontext, div, sel=false,
+                                              focuscallback=null, blurcallback=null )
 {
     let self = this;
-    
+
     this.tabs.push( tab );
     this.buttons[tab] = rkWebUtil.elemaker( "button", this.buttonbox,
                                             { "classes": [ this.tabunselcss ],
                                               "text": tab,
                                               "click": function() { self.selectTab( tab ) } } );
     this.divs[tab] = div;
+    this.focuscallbacks[tab] = focuscallback;
+    this.blurcallbacks[tab] = blurcallback;
 
     if ( sel ) this.selectTab( tab );
 }
@@ -463,6 +468,9 @@ rkWebUtil.Tabbed.prototype.addTab = function( tab, buttontext, div, sel=false )
 rkWebUtil.Tabbed.prototype.selectTab = function( tab )
 {
     if ( this.seltab == tab ) return;
+
+    if ( ( this.seltab != null ) && ( this.blurcallbacks[this.seltab] != null ) )
+        this.blurcallbacks[this.seltab]();
 
     rkWebUtil.wipeDiv( this.tabcontentdiv );
     this.tabcontentdiv.appendChild( this.divs[ tab ] );
@@ -479,6 +487,8 @@ rkWebUtil.Tabbed.prototype.selectTab = function( tab )
     }
 
     this.seltab = tab;
+    if ( this.focuscallbacks[tab] != null )
+        this.focuscallbacks[tab]();
 }
 
 // **********************************************************************
