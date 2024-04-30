@@ -412,6 +412,76 @@ rkWebUtil.stripparagraphtags = function(text)
 }
 
 // **********************************************************************
+// **********************************************************************
+// **********************************************************************
+// Class for creating a tabbed div.  To work, the css must have defined
+// the following classes (overridable in params):
+//    div.hbox          (horiziontal flex box)
+//    button.tabsel     (selected tab)
+//    button.tabunsel   (unselected tab)
+//    div.tabdiv        (the overall div of the element with button and contents)
+//    div.buttonboxdiv  (the div holding the buttons)
+//    div.tabcontentdiv (the div holding the tab contents)
+//
+// Properties:
+//   div : the overall div of the elemnt
+
+rkWebUtil.Tabbed = function( parentdiv, params ) {
+    this.hbox = 'hbox';
+    this.tabselcss = 'tabsel';
+    this.tabunselcss = 'tabunsel';
+    this.tabdivcss = 'tabdiv';
+    this.tabcontentdivcss = 'tabcontentdiv';
+    this.buttonboxdivcss = 'buttonboxdiv';
+    this.buttonelem = 'h3';
+    Object.assign( this, params );
+
+    this.selltab = null;
+    this.tabs = [];
+    this.buttons = {};
+    this.divs = {};
+
+    this.div = rkWebUtil.elemaker( "div", parentdiv, { "classes": [ this.tabdivcss ] } );
+    this.buttonbox = rkWebUtil.elemaker( "div", this.div, { "classes": [ this.buttonboxdivcss ] } );
+    this.tabcontentdiv = rkWebUtil.elemaker( "div", this.div, { "classes": [ this.tabcontentdivcss ] } );
+}
+
+rkWebUtil.Tabbed.prototype.addTab = function( tab, buttontext, div, sel=false )
+{
+    let self = this;
+    
+    this.tabs.push( tab );
+    this.buttons[tab] = rkWebUtil.elemaker( "button", this.buttonbox,
+                                            { "classes": [ this.tabunselcss ],
+                                              "text": tab,
+                                              "click": function() { self.selectTab( tab ) } } );
+    this.divs[tab] = div;
+
+    if ( sel ) this.selectTab( tab );
+}
+
+rkWebUtil.Tabbed.prototype.selectTab = function( tab )
+{
+    if ( this.seltab == tab ) return;
+
+    rkWebUtil.wipeDiv( this.tabcontentdiv );
+    this.tabcontentdiv.appendChild( this.divs[ tab ] );
+
+    for ( let buttab of this.tabs ) {
+        if ( buttab == tab ) {
+            this.buttons[buttab].classList.remove( this.tabunselcss );
+            this.buttons[buttab].classList.add( this.tabselcss );
+        }
+        else {
+            this.buttons[buttab].classList.remove( this.tabselcss );
+            this.buttons[buttab].classList.add( this.tabunselcss );
+        }
+    }
+
+    this.seltab = tab;
+}
+
+// **********************************************************************
 
 export { rkWebUtil }
 
