@@ -456,7 +456,7 @@ rkWebUtil.Tabbed.prototype.addTab = function( tab, buttontext, div, sel=false,
     this.tabs.push( tab );
     this.buttons[tab] = rkWebUtil.elemaker( "button", this.buttonbox,
                                             { "classes": [ this.tabunselcss ],
-                                              "text": tab,
+                                              "text": buttontext,
                                               "click": function() { self.selectTab( tab ) } } );
     this.divs[tab] = div;
     this.focuscallbacks[tab] = focuscallback;
