@@ -1,21 +1,21 @@
 /**
  * This file is part of rkwebutil
- * 
+ *
  * rkwebutil is Copyright 2023 by Robert Knop
- * 
+ *
  * rkwebutil is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
  * option) any later version.
- * 
+ *
  * rkwebutil is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
  * for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with rkwebutil. If not, see <https://www.gnu.org/licenses/>.
- * 
+ *
  */
 
 var SVGPlot = {};
@@ -64,7 +64,7 @@ SVGPlot.generateTickValues = function( min, max, sp )
         nsubticks = 6;
     else if ( spintmantissa == 7 )
         nsubticks = 7;
-        
+
     var ticks = [];
     // var curtick = SVGPlot.nice( min );
     var mindivsp = Math.floor( min / sp )
@@ -101,7 +101,7 @@ SVGPlot.generateTickValues = function( min, max, sp )
 // CSS classes that should be defined (see svgplot.css for template, need some layout stuff to work)
 //    div.svgplottopdiv -- Main div for plot interface.
 //    div.svgplotdiv -- Actual plot goes in here
-//    div.svgplothbox -- flex box that lays out horizontally 
+//    div.svgplothbox -- flex box that lays out horizontally
 //    [ div.svgplotvbox -- flex box that lays out vertically ] [ not used? ]
 //    .svgplotsvg -- The actual svg.  Plot styling is done inline, as
 //                   it was a nightmare trying to get external style sheets to
@@ -124,6 +124,8 @@ SVGPlot.Plot = function( inparams = {} )
                     "right": null,
                     "bottom": null,
                     "top": null,
+                    "flipx": false,
+                    "flipy": false,
                     "pagemargin": 10,
                     "borderwid": 2,
                     "bordercolor": "black",
@@ -177,7 +179,7 @@ SVGPlot.Plot = function( inparams = {} )
     this.docbox = document.createElement( "div" );
     this.docbox.setAttribute( "class", "svgplotdocbox" )
     hbox.appendChild( this.docbox );
-    
+
     var self = this;
     var button = document.createElement( "button" );
     button.appendChild( document.createTextNode( "Zoom Default" ) );
@@ -191,10 +193,10 @@ SVGPlot.Plot = function( inparams = {} )
     button.appendChild( document.createTextNode( "Zoom Out" ) );
     this.buttonbox.appendChild( button );
     button.addEventListener( "click", function() { self.zoomOut(); } );
-    
+
     if ( ! this.params.nozoomdocstring )
         this.docbox.appendChild( document.createTextNode( "  Shift+LMB to zoom" ) );
-    
+
     this.clickcallback = function( event ) { self.click( event ); };
     this.downcallback = function( event ) { self.mousedown( event ); };
     this.movecallback = function ( event ) { self.mousemoved( event ); };
@@ -222,7 +224,7 @@ SVGPlot.Plot = function( inparams = {} )
     this._defaultlimits = [...this.params.defaultlimits];
     this._zoommode = this.params.zoommode;
     this._redrawonaddpoint = false;
-    
+
     var self = this;
 
     this.resizeobs = new ResizeObserver(
@@ -263,7 +265,7 @@ Object.defineProperty( SVGPlot.Plot.prototype, "xmin", {
         this.redraw();
     }
 } );
-                     
+
 Object.defineProperty( SVGPlot.Plot.prototype, "xmax", {
     get() { return this._maxx; },
     set( val ) {
@@ -272,7 +274,7 @@ Object.defineProperty( SVGPlot.Plot.prototype, "xmax", {
         this.redraw();
     }
 } );
-                     
+
 Object.defineProperty( SVGPlot.Plot.prototype, "ymin", {
     get() { return this._miny; },
     set( val ) {
@@ -281,7 +283,7 @@ Object.defineProperty( SVGPlot.Plot.prototype, "ymin", {
         this.redraw();
     }
 } );
-                     
+
 Object.defineProperty( SVGPlot.Plot.prototype, "ymax", {
     get() { return this._maxy; },
     set( val ) {
@@ -290,7 +292,7 @@ Object.defineProperty( SVGPlot.Plot.prototype, "ymax", {
         this.redraw();
     }
 } );
-                     
+
 
 Object.defineProperty( SVGPlot.Plot.prototype, "title", {
     get() { return this.params.title },
@@ -531,6 +533,18 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             ymin = ymid - dy/2;
             ymax = ymid + dy/2;
         }
+
+        if ( this.params.flipx ) {
+            let tmp = xmax;
+            xmax = xmin;
+            xmin = tmp;
+        }
+        if ( this.params.flipy ) {
+            let tmp = ymax;
+            ymax = ymin;
+            ymin = tmp;
+        }
+
         if ( this._zoommode == "default" ) {
             if ( this._minx == null ) this._minx = xmin;
             if ( this._maxx == null ) this._maxx = xmax;
@@ -543,7 +557,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             this._maxy = ymax;
         }
     }
-   
+
     var svg = this.svg
 
     // This calculation is still returnin gsomething too wide, and I don't know why.
@@ -581,9 +595,9 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
         }
     }
     // I will add a clipping path to this later
-    
+
     // Styles
-    
+
     var style = document.createElementNS( ns, "style" );
     svg.appendChild( style );
 
@@ -594,13 +608,13 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     if ( this.params.strokedash != null )
         styletext += "; stroke-dasharray: " + this.params.borderdash.join();
     styletext += "; }\n";
-    
+
     styletext += ".svgplotaxes { stroke: " + this.params.axescolor + "; stroke-width: " + this.params.axeswid;
     if ( this.params.axesdash )
         styletext += "; stroke-dasharray: " + this.params.axesdash.join();
     styletext += "; fill: none }\n";
 
-    styletext += ".svgplottick { stroke: " + this.params.tickcolor + "; stroke-width: " 
+    styletext += ".svgplottick { stroke: " + this.params.tickcolor + "; stroke-width: "
         + this.params.tickwid + "; }\n";
     styletext += ".svgplotsubtick { stroke: " + this.params.subtickcolor + "; stroke-width: "
         + this.params.subtickwid + "; }\n";
@@ -615,10 +629,10 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     styletext += ".svgplottitle { font-family: " + this.params.titlefamily + "; ";
     styletext += "font-size: " + this.params.titlesize + "px; font-weight: " + this.params.titleweight;
     styletext += "; font-style: " + this.params.titlestyle + " }\n";
-    
+
     styletext += ".svgplotgrid { stroke: " + this.params.gridcolor + "; stroke-width: "
         + this.params.gridwid + "; }\n";
-    
+
     for ( var i in this.datasets ) {
         styletext += ".dataset" + i + " { stroke:" + this.datasets[i].color + "; ";
         styletext += "stroke-width: " + this.datasets[i].linewid + "; ";
@@ -689,7 +703,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     let size = this.elemSize( xlabelems[0] );
     var xlabheight = size.height;
     // console.log( "xlabheight = " + xlabheight );
-    
+
     var retval = SVGPlot.generateTickValues( this._miny, this._maxy, this._ytickspacing );
     var ylabels = retval.ticks;
     var ysubticks = retval.nsubticks;
@@ -703,11 +717,11 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
         svg.appendChild( text );
         let size = this.elemSize( text );
         if ( size.width > ylabwid ) ylabwid = size.width;
-        ylabelems.push( text ); 
+        ylabelems.push( text );
     }
-    
+
     // Surrounding box
-    
+
     var leftedge = this.params.pagemargin + 1.2*ytitleheight + 1.2*ylabwid;
     if ( this.params.left != null )
         leftedge = this.params.left;
@@ -720,7 +734,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var topedge = this.params.pagemargin + 1.1*titleheight;
     if ( this.params.top != null )
         topedge = this.params.top;
-    
+
     var plotwidth = rightedge - leftedge;
     var plotheight = bottomedge - topedge;
 
@@ -781,14 +795,14 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             }
         }
     }
-    
+
     // Remember the plot limits we've figured out
     this.leftedge = leftedge;
     this.topedge = topedge;
     this.bottomedge = bottomedge;
     this.plotwidth = plotwidth;
     this.plotheight = plotheight;
-    
+
     if ( this.params.borderfill != "none" ) {
         rect = document.createElementNS( ns, "rect" );
         rect.setAttribute( "class", "svgplotborderfill" );
@@ -800,7 +814,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     }
 
     // Axis titles
-    
+
     if ( title != null ) {
         title.setAttribute( "x", ( leftedge + plotwidth/2. - titlewidth/2. ).toFixed( 2 ) );
         title.setAttribute( "y", ( 1.05 * titleheight ) );
@@ -817,14 +831,17 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
         ytitle.setAttribute( "x", yx.toFixed( 2 ) );
         ytitle.setAttribute( "y", yy.toFixed( 2 ) );
         ytitle.setAttribute( "transform", "rotate(270," + yx.toFixed( 2 ) + "," + yy.toFixed( 2 ) + ")" );
-    }        
+    }
 
     // Grid, ticks and labels
-    
+
     for ( var i = 0  ; i < xlabels.length ; ++i ) {
         let xdata = parseFloat( xlabels[i] );
+        let isinside = ( ( ( this._maxx > this._minx ) && ( xdata > this._minx ) && ( xdata < this._maxx ) )
+                         ||
+                         ( ( this._minx > this._maxx ) && ( xdata > this._maxx ) && ( xdata < this._minx ) ) )
         let x = ( xdata - this._minx ) * ( plotwidth / ( this._maxx-this._minx ) ) + leftedge;
-        if ( ( this.params.gridwid > 0 ) && ( xdata > this._minx ) && ( xdata < this._maxx ) ) {
+        if ( ( this.params.gridwid > 0 ) && isinside ) {
             let line = document.createElementNS( ns, "line" );
             line.setAttribute( "x1", x.toFixed(2) );
             line.setAttribute( "y1", bottomedge );
@@ -861,8 +878,11 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
 
     for ( var i = 0 ; i < ylabels.length ; ++i ) {
         let ydata = parseFloat( ylabels[i] );
+        let isinside = ( ( ( this._maxy > this._miny ) && ( ydata > this._miny ) && ( ydata < this._maxy ) )
+                         ||
+                         ( ( this._miny > this._maxy ) && ( ydata > this._maxy ) && ( ydata < this._miny ) ) )
         let y = bottomedge - ( ydata - this._miny ) * ( plotheight / ( this._maxy-this._miny ) );
-        if ( ( this.params.gridwid > 0 ) && ( ydata > this._miny ) && ( ydata < this._maxy ) ) {
+        if ( ( this.params.gridwid > 0 ) && isinside ) {
             let line = document.createElementNS( ns, "line" );
             line.setAttribute( "x1", leftedge );
             line.setAttribute( "y1", y.toFixed( 2 ) );
@@ -916,7 +936,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     // ...this didn't work.  It would show nothing.  If I saved the generated source
     //  and reloaded it into firefox, it did work.  I really didn't understand.
     //  but, going with the inset() below seemed to work.  Scary.
-    
+
     // var clippath = document.createElementNS( ns, "clipPath" );
     // clippath.setAttribute( "id", this.params.svgid + "-svgplotclip" );
     // // clippath.setAttribute( "clipPathUnits", "userSpaceOnUse" );
@@ -928,32 +948,52 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     // rect.setAttribute( "height", plotheight.toFixed( 2) );
     // clippath.appendChild( rect );
     // console.log( "Clipping path set to " + leftedge + " , " + topedge + " ... " + plotwidth + ", " + plotheight );
-    
+
     // Datasets
-    
+
     for ( var j in this.datasets ) {
         dataset = this.datasets[j];
         var points = "";
+        let xpxes = [];
+        let ypxes = [];
         for ( var i in dataset._x ) {
             var plotpt = this.dataToSVG( dataset._x[i], dataset._y[i], dataset );
+            let xpx = Math.round(plotpt.x*100) / 100
+            let ypx = Math.round(plotpt.y*100) / 100
             if ( i > 0 ) points += " ";
-            points += Math.round(plotpt.x*100) / 100 + "," + Math.round(plotpt.y*100) / 100;
+            points += xpx + "," + ypx;
+            xpxes.push( xpx );
+            ypxes.push( ypx );
         }
-        var polyline = document.createElementNS( ns, "polyline" );
-        polyline.setAttribute( "class", "dataset" + j );
-        polyline.setAttribute( "points", points )
+        // TODO : move this definition outside of the for loop (potentially way up)
         let clippath = "inset( "
             + topedge.toFixed(2) + " "
             + ( this.params.width - rightedge ).toFixed(2) + " "
             + ( this.params.height - bottomedge).toFixed(2) + " "
-            + leftedge.toFixed(2) +") view-box" 
-        polyline.setAttribute( "clip-path", clippath );
-        if ( dataset.marker != null ) {
-            polyline.setAttribute( "marker-start", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
-            polyline.setAttribute( "marker-mid", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
-            polyline.setAttribute( "marker-end", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+            + leftedge.toFixed(2) +") view-box"
+        if ( dataset.linewid > 0 ) {
+            var polyline = document.createElementNS( ns, "polyline" );
+            polyline.setAttribute( "class", "dataset" + j );
+            polyline.setAttribute( "points", points )
+            polyline.setAttribute( "clip-path", clippath );
+            if ( dataset.marker != null ) {
+                polyline.setAttribute( "marker-start", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+                polyline.setAttribute( "marker-mid", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+                polyline.setAttribute( "marker-end", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+            }
+            svg.appendChild( polyline );
+        } else if ( dataset.marker != null ) {
+            for ( let i in xpxes ) {
+                var polyline = document.createElementNS( ns, "polyline" );
+                polyline.setAttribute( "class", "dataset" + j );
+                polyline.setAttribute( "points", "" + xpxes[i] + "," + ypxes[i] );
+                polyline.setAttribute( "clip-path", clippath );
+                polyline.setAttribute( "marker-start", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+                polyline.setAttribute( "marker-mid", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+                polyline.setAttribute( "marker-end", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+                svg.appendChild( polyline );
+            }
         }
-        svg.appendChild( polyline );
 
         // Error bars
         if ( this.params.showerrbar ) {
@@ -995,7 +1035,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     }
 
     // OMG that was huge
-    
+
     return svg;
 }
 
@@ -1096,7 +1136,7 @@ SVGPlot.Plot.prototype.click = function( event )
     if ( this.clicklisteners.length == 0 ) return;
 
     if ( event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ) return;
-    
+
     // let pt = this.svg.createSVGPoint();
     // pt.x = event.clientX;
     // pt.y = event.clientY;
@@ -1108,7 +1148,7 @@ SVGPlot.Plot.prototype.click = function( event )
     // let clickdatax = ( ( transpt.x - this.leftedge ) * datawid / this.plotwidth + this._minx );
     // let clickdatay = this._maxy - ( ( transpt.y - this.topedge ) * datahei / this.plotheight );
     let clickpt = this.screenToData( event.clientX, event.clientY, null );
-    
+
     // Find the closest point
 
     let minsetdex = null;
@@ -1142,7 +1182,7 @@ SVGPlot.Plot.prototype.click = function( event )
     // let svgx = ( closex - this._minx ) * this.plotwidth / ( this._maxx - this._minx ) + this.leftedge;
     // let svgy = ( this._maxy - closey ) * this.plotheight / (this._maxy - this._miny ) + this.topedge;
     let svgpt = this.dataToSVG( closex, closey );
-    
+
     if ( this.highlighter != null ) {
         this.highlighter.remove();
         this.highlighter = null;
@@ -1255,6 +1295,18 @@ SVGPlot.Plot.prototype.mouseup = function( event )
         }
         this.zoombox.remove();
         this._zoommode = "manual";
+
+        if ( this.params.flipx ) {
+            let tmp = this._minx;
+            this._minx = this._maxx;
+            this._maxx = tmp;
+        }
+        if ( this.params.flipy ) {
+            let tmp = this._miny;
+            this._miny = this._maxy;
+            this._maxy = tmp;
+        }
+
         this.redraw();
     }
 }
@@ -1317,7 +1369,7 @@ SVGPlot.Dataset = function( inparams = {} )
         return;
     }
     this.replaceData( params.x, params.y, params.dx, params.dy, params.pointnames );
-    
+
     this.marker = SVGPlot.Dataset.markerCode( params.marker, params.markercolor,
                                               params.markersize, params.markerstrokewid );
 
@@ -1399,7 +1451,8 @@ SVGPlot.Dataset.markerCode = function( markername, markercolor, markersize, mark
     }
     else if ( markername == "diamond" || markername == "filleddiamond" ) {
         var diamond = document.createElementNS( ns, "polyline" );
-        diamond.setAttribute( "points", "0,0 0,10 10,10 10,0 0,0" );
+        // diamond.setAttribute( "points", "0,0 0,10 10,10 10,0 0,0" );
+        diamond.setAttribute( "points", "5,0 10,5 5,10 0,5 5,0" );
         if ( markername == "filleddiamond" ) {
             diamond.setAttribute( "fill", markercolor );
             diamond.setAttribute( "stroke", "none" );
@@ -1440,7 +1493,7 @@ SVGPlot.Dataset.markerCode = function( markername, markercolor, markersize, mark
         console.log( "ERROR: unknown marker type " + markername );
         return null;
     }
-        
+
     return marker;
 }
 
@@ -1468,7 +1521,7 @@ SVGPlot.Dataset.prototype.addPoint = function( x, y, dx=null, dy=null, name=null
         if ( dx == null ) this._dx.push( 0. );
         else this._dx.push( dx );
     }
-    else { 
+    else {
         if ( dx != null ) {
             console.log( "WARNING: got a non-null dx for a dataset with no dx " +
                          "(I think... at least x and dx lengths don't match)" )
@@ -1478,7 +1531,7 @@ SVGPlot.Dataset.prototype.addPoint = function( x, y, dx=null, dy=null, name=null
         if ( dy == null ) this._dy.push( 0. );
         else this._dy.push( dy );
     }
-    else { 
+    else {
         if ( dy != null ) {
             console.log( "WARNING: got a non-null dy for a dataset with no dy " +
                          "(I think... at least y and dy lengths don't match)" )
