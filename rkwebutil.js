@@ -243,11 +243,117 @@ rkWebUtil.hideOrShow = function( widget, parameter, hideparams, showparams, disp
 }
 
 // **********************************************************************
+// Javascript's atob and btoa functions are disasters.  They don't
+//   actually properly convert binary, they do weird things with and to
+//   strings.  They certainly don't produce things you could send
+//   somewhere else and use with base64 libraries anywhere else.  Also,
+//   btoa can't eat an ArrayBuffer, even though that's what you read
+//   files to.
+//
+// So I really know what I'm doing, I'm writing my own to actually
+//   implement the standard, converting binary arryas to strings and back.
+//   Of course, I *think* that javascript represents strings as UTF-16
+//   internally, so you have to really treat the strings as encoded text,
+//   and then decode them (manually) as ASCII to use them.
+//
+// These routines will be slow, so probably don't use them on big data.
 
-rkWebUtil.arrayBufferToB64 = function ( buffer ) {
-    // I cannot freaking believe that javascript wants you to read files to
-    //  an ArrayBuffer, but then it doesn't have a btoa function that can
-    //  eat an ArrayBuffer and produce base64 encoded stuff.
+rkWebUtil._b64letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+rkWebUtil._invb64letters = null;
+
+rkWebUtil.b64encode = function( bytes )
+{
+    let i = 0;
+    let encstr = '';
+
+    while ( i+3 <= bytes.length ) {
+        encstr += rkWebUtil._b64letters[ ( ( bytes[i]   & 0b11111100 ) >> 2 ) ];
+        encstr += rkWebUtil._b64letters[ ( ( bytes[i]   & 0b00000011 ) << 4 ) +
+                                         ( ( bytes[i+1] & 0b11110000 ) >> 4 ) ];
+        encstr += rkWebUtil._b64letters[ ( ( bytes[i+1] & 0b00001111 ) << 2 ) +
+                                         ( ( bytes[i+2] & 0b11000000 ) >> 6 ) ];
+        encstr += rkWebUtil._b64letters[ ( ( bytes[i+2] & 0b00111111 ) ) ];
+        i += 3;
+    }
+
+    let penultimatebyte = null;
+    let ultimatebyte = null;
+    if ( i < bytes.length ) {
+        encstr += rkWebUtil._b64letters[ ( bytes[i] & 0b11111100 ) >> 2 ];
+        penultimatebyte += ( bytes[i] & 0b00000011 ) << 4;
+        if ( i+1 < bytes.length ) {
+            penultimatebyte += ( bytes[i+1] & 0b11110000 ) >> 4;
+            ultimatebyte = ( bytes[i+1] & 0b00001111 ) << 2;
+        }
+        encstr += rkWebUtil._b64letters[ penultimatebyte ];
+        if ( ultimatebyte == null ) encstr += "==";
+        else encstr += rkWebUtil._b64letters[ ultimatebyte ] + "=";
+    }
+
+    return encstr;
+}        
+    
+
+rkWebUtil.b64decode = function( text )
+{
+    if ( ( text.length % 4 ) != 0 ) {
+        console.log( "ERROR : got b64 string of length " + text.length + ", which isn't a factor of 4" );
+        return null;
+    }
+    
+    // Making no assumptions about character encoding here
+    // I could probably make this more efficient if I did
+    if ( rkWebUtil._invb64letters == null ) {
+        rkWebUtil._invb64letters = {};
+        for ( let i in rkWebUtil._b64letters ) {
+            rkWebUtil._invb64letters[ rkWebUtil._b64letters[i] ] = i;
+        }
+    }
+
+    let len = text.length / 4 * 3;
+    if ( text.substring( text.length-1, text.length ) == '=' ) {
+        len -= 1;
+        if ( text.substring( text.length-2, text.length-1 ) == '=' ) {
+            len -= 1;
+        }
+    }
+    let bytes = new Uint8Array( len );   // Initializes to zeros, I hope!
+
+    let chardex = 0;
+    let bytedex = 0;
+    // There must be a cleverer way to do this
+    while ( chardex < text.length ) {
+        let encbyte0 = rkWebUtil._invb64letters[ text[chardex] ];
+        let encbyte1 = rkWebUtil._invb64letters[ text[chardex+1] ];
+        let encbyte2 = ( text[chardex+2] == "=" ) ? 0 : rkWebUtil._invb64letters[ text[chardex+2] ];
+        let encbyte3 = ( text[chardex+3] == "=" ) ? 0 : rkWebUtil._invb64letters[ text[chardex+3] ];
+        bytes[ bytedex ] = ( encbyte0 << 2 ) | ( ( encbyte1 & 0b110000 ) >> 4 );
+        if ( bytedex+1 < len )
+            bytes[ bytedex+1 ] = ( ( encbyte1 & 0b001111 ) << 4 ) | ( ( encbyte2 & 0b111100 ) >> 2 );
+        if ( bytedex+2 < len ) {
+            // Sigh.  Langauges that aren't strongly typed but still let you do bit operations.
+            //   The "& 0b111111" on encbyte3 below should be wholly gratuitous, and yet without
+            //   it there javascript was not doing the right things (it seemed to be wiping out
+            //   any bits shifted over from encbyte2).  It would be better if I could explicitly
+            //   declare these things as unit8.  (Or, maybe this is just javascript being
+            //   mysterious and confusing, which is also a thing.)
+            bytes[ bytedex+2 ] = ( ( encbyte2 & 0b000011 ) << 6 ) | ( encbyte3 & 0b111111 );
+        }
+        chardex += 4;
+        bytedex += 3;
+    }
+
+    return bytes;
+}
+
+        
+// For backwards compatibility with earlier versions of rkWebUtil:
+// It's possible that this can replace b64encode above....
+rkWebUtil.arrayBufferToB64 = function( buffer )
+{
+    // This will be wasteful if it's already a Uint8Array,
+    //   but we want to be able to take either that or
+    //   an ArrayBuffer
     let bytebuffer = new Uint8Array( buffer )
     let nbytes = bytebuffer.byteLength;
     let blob = '';

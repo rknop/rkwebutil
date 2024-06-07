@@ -163,6 +163,8 @@ class AuthUser(Base):
     email = sqlalchemy.Column( sqlalchemy.Text, nullable=False, index=True )
     pubkey = sqlalchemy.Column( sqlalchemy.Text )
     privkey = sqlalchemy.Column( sqlalchemy.Text )
+    salt = sqlalchemy.Column( sqlalchemy.Text )
+    iv = sqlalchemy.Column( sqlalchemy.Text )
     lastlogin = sqlalchemy.Column( sqlalchemy.DateTime(timezone=True), default=None )
     
     @classmethod

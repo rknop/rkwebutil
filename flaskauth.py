@@ -90,6 +90,8 @@ def getchallenge():
         flask.session['authuuid']= tmpuuid
         retdata = { 'username': user.username,
                     'privkey': user.privkey,
+                    'salt': user.salt,
+                    'iv': user.iv,
                     'challenge': challenge }
         return flask.jsonify( retdata )
     except Exception as e:
@@ -198,8 +200,6 @@ def resetpassword():
     # sys.stderr.write( f"In ResetPassword, webapdirurl is {webapdirurl}\n" )
     # response += "<link href=\"" + webapdirurl
     # response += "photodb.css\" rel=\"stylesheet\" type=\"text/css\">\n"
-    response += "<script src=\"" + webapdirurl + "static/aes.js\"></script>\n"
-    response += "<script src=\"" + webapdirurl + "static/jsencrypt.min.js\"></script>\n"
     response += "<script src=\"" + webapdirurl + "static/resetpasswd_start.js\" type=\"module\"></script>\n"
     response += "</head>\n<body>\n"
     response += f"<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n";
@@ -242,25 +242,25 @@ def resetpassword():
         return flask.make_response( response )
 
 
-@bp.route( '/getkeys', methods=['POST'] )
-def getkeys():
-    try:
-        if not flask.request.is_json:
-            return flask.jsonify( { 'error': '/auth/getkeys was expecting application/json' } )
-        if 'passwordlinkid' not in flask.request.json:
-            return flask.jsonify( { "error": "No password link id specified" } )
-        sys.stderr.write( f"flask.request.json['passwordlinkid'] is {flask.request.json['passwordlinkid']}\n" )
-        link = db.PasswordLink.get( flask.request.json['passwordlinkid'] )
-        if link is None:
-            return flask.jsonify( { "error": "Invalid password link id" } )
-        if link.expires < datetime.datetime.now(pytz.utc):
-            return flask.jsonify( { "error": "Password reset link has expired" } )
-        keys = Cryptodome.PublicKey.RSA.generate( 2048 )
-        return flask.jsonify( { "privatekey": keys.exportKey().decode("UTF-8"),
-                                "publickey": keys.publickey().exportKey().decode("UTF-8") } )
-    except Exception as e:
-        sys.stderr.write( f'{traceback.format_exc()}\n' )
-        return flask.jsonify( { "error": f"Exception in GetKeys: {str(e)}" } )
+# @bp.route( '/getkeys', methods=['POST'] )
+# def getkeys():
+#     try:
+#         if not flask.request.is_json:
+#             return flask.jsonify( { 'error': '/auth/getkeys was expecting application/json' } )
+#         if 'passwordlinkid' not in flask.request.json:
+#             return flask.jsonify( { "error": "No password link id specified" } )
+#         sys.stderr.write( f"flask.request.json['passwordlinkid'] is {flask.request.json['passwordlinkid']}\n" )
+#         link = db.PasswordLink.get( flask.request.json['passwordlinkid'] )
+#         if link is None:
+#             return flask.jsonify( { "error": "Invalid password link id" } )
+#         if link.expires < datetime.datetime.now(pytz.utc):
+#             return flask.jsonify( { "error": "Password reset link has expired" } )
+#         keys = Cryptodome.PublicKey.RSA.generate( 2048 )
+#         return flask.jsonify( { "privatekey": keys.exportKey().decode("UTF-8"),
+#                                 "publickey": keys.publickey().exportKey().decode("UTF-8") } )
+#     except Exception as e:
+#         sys.stderr.write( f'{traceback.format_exc()}\n' )
+#         return flask.jsonify( { "error": f"Exception in GetKeys: {str(e)}" } )
 
 @bp.route( '/changepassword', methods=['POST'] )
 def changepassword():
@@ -273,12 +273,18 @@ def changepassword():
             return flask.jsonify( { "error": "Call to changepassword without publickey" } )
         if not "privatekey" in flask.request.json:
             return flask.jsonify( { "error": "Call to changepassword without privatekey" } )
+        if not "salt" in flask.request.json:
+            return flask.jsonify( { "error": "Call to changepassword without salt" } )
+        if not "iv" in flask.request.json:
+            return flask.jsonify( { "error": "Call to changepassword without iv" } )
 
         with db.DB.get() as dbsess:
             pwlink = db.PasswordLink.get( flask.request.json['passwordlinkid'], curdb=dbsess )
             user = db.AuthUser.get( pwlink.userid, curdb=dbsess )
             user.pubkey = flask.request.json['publickey']
             user.privkey = flask.request.json['privatekey']
+            user.salt = flask.request.json['salt']
+            user.iv = flask.request.json['iv']
             dbsess.db.delete( pwlink )
             dbsess.db.commit()
             return flask.jsonify( { "status": "Password changed" } )

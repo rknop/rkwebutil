@@ -12,7 +12,7 @@ RUN DEBIAN_FRONTEND="noninteractive" TZ="US/Pacific" \
     && apt-get -y upgrade \
     && DEBIAN_FRONTEND="noninteractive" TZ="US/Pacific" \
     apt-get -y install -y \
-       python3 python3-pip python3-pycryptodome python3-psycopg2 gunicorn tmux netcat curl elinks \
+       python3 python3-pip python3-pycryptodome python3-psycopg2 gunicorn tmux netcat curl elinks openssl \
     && apt-get -y autoremove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

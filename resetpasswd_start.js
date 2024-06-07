@@ -41,7 +41,7 @@ rkAuth.init_interval = window.setInterval(
                 let div = document.getElementById( "authdiv" );
                 let auther = new rkAuth( div, webapurl, null );
                 let button = document.getElementById( "setnewpassword_button" );
-                button.addEventListener( "click", function() { auther.getPrivKey() } );
+                button.addEventListener( "click", function() { auther.setNewPassword() } );
             }
         }
     },
