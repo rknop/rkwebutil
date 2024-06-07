@@ -1,21 +1,9 @@
 /**
  * This file is part of rkwebutil
- * 
+ *
  * rkwebutil is Copyright 2023-2024 by Robert Knop
- * 
- * rkwebutil is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- * 
- * rkwebutil is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
- * for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with rkwebutil. If not, see <https://www.gnu.org/licenses/>.
- * 
+ *
+ * rkwebutil is free software under the BSD 3-clause license (see LICENSE)
  */
 
 import { rkWebUtil } from "./rkwebutil.js"
@@ -62,7 +50,7 @@ var rkAuth = function( authdiv, webapurl, isauthcallback,
      */
 
     var self = this;
-    
+
     this.authdiv = authdiv;
     this.webapurl = webapurl;
     this.isauthcallback = isauthcallback;
@@ -143,7 +131,7 @@ rkAuth.prototype.processCheckAuth = function( statedata, isauthcallback, isnotau
             this.notauthcallback();
     }
 }
-    
+
 
 // **********************************************************************
 
@@ -174,7 +162,7 @@ rkAuth.prototype.loggedout = function( loggedoutcallback ) {
 rkAuth.prototype.showLoginUI = function() {
     let table, tr, td, button, p;
     let self = this;
-    
+
     rkWebUtil.wipeDiv( this.authdiv );
 
     table = rkWebUtil.elemaker( "table", this.authdiv );
@@ -213,26 +201,27 @@ rkAuth.prototype.startLogin = function() {
                                function( statedata ) {
                                    self.processChallenge( statedata, password ) },
                                self.errorhandler );
-}                                   
+}
 
 // **********************************************************************
 
 rkAuth.prototype.getAESKey = async function( password, salt, iv )
 {
+    let encoder = new TextEncoder();
     const pwbytes = encoder.encode( password );
     const initialkey = await crypto.subtle.importKey( "raw", pwbytes, "PBKDF2", false, [ "deriveKey" ] );
     const aeskey = await crypto.subtle.deriveKey( { "name": "PBKDF2", "hash": "SHA-256",
                                                     "salt": salt, "iterations": 100000 },
                                                   initialkey,
                                                   { "name": "AES-GCM", length: 256 },
-                                                  false,
+                                                  false, // exportable?
                                                   [ "encrypt", "decrypt" ] );
     return aeskey;
 }
 
 //**********************************************************************
 
-rkAuth.prototype.processChallenge = function( retdata, password ) {
+rkAuth.prototype.processChallenge = async function( retdata, password ) {
     var self = this;
     var rsadecrypt, privkey, response, requestdata;
 
@@ -248,21 +237,27 @@ rkAuth.prototype.processChallenge = function( retdata, password ) {
 
     var response = "";
     try {
-        let deocder = new TextDecoder();
-        
+        let decoder = new TextDecoder();
+
+        // console.log( JSON.stringify( retdata, null, 4 ) );
         const salt = rkWebUtil.b64decode( retdata.salt );
         const iv = rkWebUtil.b64decode( retdata.iv );
         const aeskey = await this.getAESKey( password, salt, iv );
+        // ****
+        // Need to make the exportable true in getAESKey() for this to work
+        // const encaeskey = await crypto.subtle.exportKey( "jwk", aeskey );
+        // console.log( "Decrypted aeskey = " + JSON.stringify( encaeskey, null, 4 ) );
+        // ****
         const privkeybytes = new Uint8Array(
             await crypto.subtle.decrypt( { "name": "AES-GCM", "iv": iv }, aeskey,
-                                         rkWebUtil.b64decode( retdata.privkey ) );
+                                         rkWebUtil.b64decode( retdata.privkey ) )
         );
         const privkey = await crypto.subtle.importKey( "pkcs8", privkeybytes,
                                                        { "name": "RSA-OAEP", "hash": "SHA-256" },
                                                        false,
                                                        [ "decrypt" ] );
         const plainbytes = new Uint8Array(
-            await crypto.subtle.derypt( { "name": "RSA-OAEP" }, privkey, data.challenge ) );
+            await crypto.subtle.decrypt( { "name": "RSA-OAEP" }, privkey, rkWebUtil.b64decode( retdata.challenge ) ) );
         response = decoder.decode( plainbytes );
     }
     catch( err )
@@ -271,13 +266,8 @@ rkAuth.prototype.processChallenge = function( retdata, password ) {
         return;
     }
 
-    rsadecrypt = new JSEncrypt();
-    rsadecrypt.setPrivateKey( privkey );
-    // Experimentally, JSEncrypt.decrypt wants base64 data
-    response = rsadecrypt.decrypt( retdata.challenge );
-
     requestdata = { 'username': retdata.username,
-                    'response': plaintext };
+                    'response': response };
     this.conn.sendHttpRequest( "/auth/respondchallenge", requestdata,
                                function( statedata ) { self.processChallengeResponse( statedata ) },
                                self.errorhandler );
@@ -313,7 +303,7 @@ rkAuth.prototype.processChallengeResponse = function( retdata ) {
 rkAuth.prototype.passwordLinkUI = function() {
     let table, tr, td, button;
     let self = this;
-    
+
     rkWebUtil.wipeDiv( this.authdiv );
 
     table = rkWebUtil.elemaker( "table", this.authdiv );
@@ -367,10 +357,8 @@ rkAuth.prototype.passwordLinkSent = function( res ) {
 
 // **********************************************************************
 
-rkAuth.prototype.setNewPassword = function() {
+rkAuth.prototype.setNewPassword = async function() {
     let self = this;
-
-    let encoder = new TextEncoder();
 
     // Make the RSA key
     const keypair = await crypto.subtle.generateKey( { "name": "RSA-OAEP",
@@ -390,11 +378,21 @@ rkAuth.prototype.setNewPassword = function() {
     const salt = crypto.getRandomValues( new Uint8Array(16) );
     const iv = crypto.getRandomValues( new Uint8Array(12) );
     const aeskey = await this.getAESKey( password, salt, iv );
-    const privkey = new Uint8Array( await crypto.subtle.exportKey( "spki", keypair.privateKey ) );
+    // ****
+    // Need to make the exportable true in getAESKey() for this to work
+    // const encaeskey = await crypto.subtle.exportKey( "jwk", aeskey );
+    // console.log( "Created aeskey = " + JSON.stringify( encaeskey, null, 4 ) );
+    // ****
+    const privkey = new Uint8Array( await crypto.subtle.exportKey( "pkcs8", keypair.privateKey ) );
     const encprivkey = rkWebUtil.b64encode(
-        new Uint8Array( await crypto.subtle.encrypt( { "name": "AES-GCM", "iv", iv }, aeskey, privkey ) );
+        new Uint8Array( await crypto.subtle.encrypt( { "name": "AES-GCM", "iv": iv }, aeskey, privkey ) )
     );
-    
+
+    // console.log( JSON.stringify( { "privatekey": encprivkey,
+    //                                "salt": rkWebUtil.b64encode( salt ),
+    //                                "iv": rkWebUtil.b64encode( iv ) },
+    //                              null, 4 ) );
+
     this.conn.sendHttpRequest( "/auth/changepassword",
                                { "passwordlinkid": document.getElementById( "resetpasswd_linkid" ).value,
                                  "publickey": pubkey,
@@ -422,7 +420,7 @@ rkAuth.prototype.confirmChangePassword = function( statedata ) {
     let p = document.createElement( "p" );
     this.authdiv.appendChild( p );
     p.appendChild( document.createTextNode( "Password change complete." ) );
-}    
+}
 
 
 

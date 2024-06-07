@@ -1,19 +1,137 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 # This file is part of rkwebutil
 #
-# rkwebutil is Copyright 2023 by Robert Knop
+# rkwebutil is Copyright 2023-2024 by Robert Knop
 #
-# rkwebutil is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
+# rkwebutil is free software, available under the BSD 3-clause license (see LICENSE)
+
+#### HOW TO USE
+# This is for a webap built with flask and a database built with SQLAlchemy.
 #
-# rkwebutil is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-# FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
-# for more details.
+# An example may be found in test/docker_flaskserver
 #
-# You should have received a copy of the GNU General Public License
-# along with rkwebutil. If not, see <https://www.gnu.org/licenses/>.
+# 1. Create the db module (see "DATABASE ASSUMPTIONS" below).  It must
+#    be able to fully initialze the database.  (This could include a
+#    call to a function inside it from your main webap code, for
+#    instance.)  An example is in test/docker_flaskserver/ap/db.py
+#
+# 2. Import this file into your main webap code.
+#
+# 3. Create a flask app, and make sure it is configured for server-side
+#    sessions; you do *not* want to use client side sessions with
+#    authentication systems.  (In particular, with this system,
+#    looking at the session data gives you enough information to
+#    log in without knowing the user's password.)
+#
+#    Exmaple code that will accomplish this:
+#
+#      app = flask.Flask(  __name__ )
+#      app.logger.setLevel( logging.INFO )
+#      app.config.from_mapping(
+#          SECRET_KEY='blah',
+#          SESSION_COOKIE_PATH='/',
+#          SESSION_TYPE='filesystem',
+#          SESSION_PERMANENT=True,
+#          SESSION_USE_SIGNER=True,
+#          SESSION_FILE_DIR='/sessions',
+#         SESSION_FILE_THRESHOLD=1000,
+#      )
+#
+#    replace '/sessions' with the directory where the web server can store session files.
+#
+# 4. Configure email for password link sending.  After you've imported this file,
+#    do the following:
+#      rkauth.RKAuthConfig.email_from = 'your webap <nobody@nowhere.org>'
+#      rkauth.RKAuthConfig.email_subject = 'reset password email subject'
+#      rkauth.RKAuthConfig.email_system_name = 'your webapp system name'
+#      rkauth.RKAuthConfig.smtp_server = 'your smtp server'
+#      rkauth.RKAuthConfig.smtp_port = 465
+#      rkauth.RKAuthConfig.smtp_use_ssl = True
+#      rkauth.RKAuthConfig.smtp_username = 'your smtp username'
+#      rkauth.RKAuthConfig.smtp_password = 'your smtp passwrd'
+#      rkauth.RKAuthConfig.webap_url = '<url>/auth'
+#
+#    Make all of the variables the right things so that you can send
+#    email, and so that the email headers and body look like what you'd
+#    want.  In particular, <url> must be the base url of your web
+#    application.
+#
+# 5. Add the following code:
+#      app.register_blueprint( rkauth.bp )
+#
+#    That will hook up a subapplication /auth under your main webap that
+#    handles all of the authentication stuff.
+#
+# TODO ROB WRITE THE REST
+## OLD
+## In your webap, you can find out if the user has been authenticated by
+## accessing the session; 
+##    authenticated : True or False
+##    useruuid
+##    username
+##    userdisplayname
+##    useremail
+##    ( there's also authuuid, a temporary throwaway value )
+##
+## CLIENT SIDE:
+##
+## use rkauth.js and resetpasswd_start.js.  It assumes that there are
+## css classes "link" and "center" defined.  When you start up the
+## javascript of your web application, instantiate a rkAuth, and then
+## call checkAuth() on that instance at the end of your initialization;
+## use the callbacks you passed to the constructor to do the rest of
+## your rendering.  See the example in tests/docker_flaskwebserver for an
+## example.
+
+
+# ======================================================================
+# DATABASE ASSUMPTIONS
+#
+# This file imports a module db which must include the following SQLAlchemy models:
+#
+# db.AuthUser
+#   columns:
+#     id (postgres UUID, primary key, unique)
+#     username (text, unique)
+#     displayname (text)
+#     email (text)
+#     pubkey (text)
+#     privkey (postgres JSONB)
+#     lastlogin (DaeTime(timezone=True))
+#
+#   methods:
+#      @classmethod
+#      def get( cls, id, session=None ):
+#         Takes a string or uuid as id, optionally an SQLAlchmey session (or equivalent),
+#         returns a db.AuthUser or None
+#
+#      @classmethod
+#      def get( cls, name, session=None ):
+#
+#      @classmethod
+#      def getbyemail( cls, name, session=None ):
+#
+# db.PasswordLink
+#   columns:
+#     id (postgres UUID, primary key, unique)
+#     userid (postgres UUID, foreignkey to db.AuthUser.id)
+#     expires (DateTime(timezone=True))
+#
+#   methods:
+#     @classmethod
+#     def new( cls, userid, expires=None, session=None ):
+#        Given a userid, create a new password link.  If expires is None,
+#        will be 1 hour from right now.  session is optinally
+#        an SQLAlchemy session (or equivalent)
+#
+#     @classmethod
+#     def get( cls, uuid, session=None ):
+#        Given a string or uuid, and optionally an SQLAlchemy session or
+#        equivalent, return a PaswordLink or None
+# web.smtp also needs to be fully configured
+#
 
 import sys
 import pathlib
@@ -27,8 +145,9 @@ import ssl
 from email.message import EmailMessage
 from email.policy import EmailPolicy
 import flask
-import Cryptodome.PublicKey.RSA
-import Cryptodome.Cipher.PKCS1_v1_5
+import Crypto.PublicKey.RSA
+import Crypto.Cipher.PKCS1_OAEP
+import Crypto.Hash
 
 _dir = pathlib.Path(__file__).parent
 if str(_dir) not in sys.path:
@@ -56,74 +175,131 @@ class RKAuthConfig:
     webap_url = None
 
     def setdbparams( *args ):
-        db.DB.setdbparams( *args )
-    
-# ROB WRITE INSTRUCTIONS
+        """....weird
+
+        I don't understand why this is necessary, but see
+        docker_flaskserver/ap/__init__.py and search for
+        RKAuthConfig.setdbparams.
+
+        """
+        db.setdbparams( *args )
 
 @bp.route( '/getchallenge', methods=['POST'] )
 def getchallenge():
+    """Return an encrypted challenge.
+
+    POST data JSON dictionary
+    -------------------------
+      username : str
+        The username of the user trying to log in
+
+    Response
+    --------
+      200 application/json or 500 text/plain
+
+          { 'username': str  # user's username
+            'privkey': str   # user's private key encrypted with user's password
+            'salt': str      # salt used in generating the aes key from the user's password
+            'iv': str        # init. vector used in decrypting the user's private key with the aes key
+            'challenge': str # a uuid encrypted with the user's public key
+          }
+
+          In the envet of an error, returns an HTTP 500 with an utf8
+          text error message.  Some specific errors returned:
+             "No such user {username}"                            # if the user is not found int he database
+             "User {username} does not have a password set yet"   # If the pubkey is null
+
+    """
     try:
         flask.session['authenticated'] = False
         if not flask.request.is_json:
-            return flask.jsonify( { 'error': '/auth/getchallenge was expecting application/json' } )
-        if not 'username' in flask.request.json:
-            return flask.jsonify( { 'error': 'No username sent to server' } )
-        with db.DB.get() as dbsess:
-            users = db.AuthUser.getbyusername( flask.request.json['username'] )
-            if len(users) > 1:
-                return flask.jsonify( { 'error':
-                                        f'User {flask.request.json["username"]} is multiply defined; this is bad!' } )
-            if len(users) == 0:
-                return flask.jsonify( { 'error': f'No such user {flask.request.json["username"]}' } )
-            user = users[0]
-        tmpuuid = str( uuid.uuid4() )
+            return "Error, /auth/getchallenge was expecting application/json", 500
+        data = flask.request.json
+
+        if not 'username' in data:
+            return "Error, no username sent to server", 500
+        users = db.AuthUser.getbyusername( data['username'] )
+        if len(users) > 1:
+            return f"Error, {data['username']} is multiply defined, database is corrupted", 500
+        if len(users) == 0:
+            return f"No such user {data['username']}", 500
+        user = users[0]
         if user.pubkey is None:
-            return flask.jsonify( { 'error': ( f'User {flask.request.json["username"]} '
-                                               f'does not have a password set yet.' ) } )
-        pubkey = Cryptodome.PublicKey.RSA.importKey( user.pubkey )
-        cipher = Cryptodome.Cipher.PKCS1_v1_5.new( pubkey )
-        challenge = binascii.b2a_base64( cipher.encrypt( tmpuuid.encode("UTF-8") ) ).decode( "UTF-8" )
+            return f"User {data['username']} does not have a password set yet", 500
+
+        tmpuuid = str( uuid.uuid4() )
+        pubkey = Crypto.PublicKey.RSA.importKey( user.pubkey )
+        cipher = Crypto.Cipher.PKCS1_OAEP.new( pubkey, hashAlgo=Crypto.Hash.SHA256 )
+        flask.current_app.logger.debug( f"Sending challenge UUID {tmpuuid}" )
+        challenge = binascii.b2a_base64( cipher.encrypt( tmpuuid.encode("UTF-8") ) ).decode( "UTF-8" ).strip()
         flask.session['username'] = user.username
         flask.session['useruuid'] = user.id
         flask.session['userdisplayname'] = user.displayname
         flask.session['useremail'] = user.email
         flask.session['authuuid']= tmpuuid
+        flask.session['authenticated'] = False
         retdata = { 'username': user.username,
-                    'privkey': user.privkey,
-                    'salt': user.salt,
-                    'iv': user.iv,
+                    'privkey': user.privkey['privkey'],
+                    'salt': user.privkey['salt'],
+                    'iv': user.privkey['iv'],
                     'challenge': challenge }
-        return flask.jsonify( retdata )
+        return retdata
     except Exception as e:
-        sys.stderr.write( f'{traceback.format_exc()}\n' )
-        return flask.jsonify( { 'error': f'Exception in GetAuthChallenge: {str(e)}' } )
+        flask.current_app.logger.exception( "Exception in getchallenge" )
+        return f"Exception in getchallenge: {str(e)}", 500
 
 
 @bp.route( '/respondchallenge', methods=['POST'] )
 def respondchallenge():
+    """Check to see if the client passed the challenge, authenticate user if so.
+
+    POST data JSON dictionary
+    -------------------------
+      username : str
+        User's username
+
+      response : str
+        Decrypted challenge sent by getchallenge above
+
+    Response
+    --------
+      200 application/json or 500 text/plain
+         { 'status': 'ok',
+           'message': 'User {username} logged in.',
+           'useruuid': str,        # The users database uuid primary key
+           'useremail': str,       # The user's email
+           'userdisplayname': str  # The user's display name
+         }
+
+         or, in the event that the challenge is incorrect:
+
+         { 'status': 'error',
+           'message': 'Authentication failure.'
+         }
+
+         Other errors return a HTTP 500 with a text/plain error message
+
+    """
     try:
         if not flask.request.is_json:
-            return flask.jsonify( { 'error': '/auth/getchallenge was expecting application/json' } )
+            return "auth/respondchallenge was expecting application/json", 500
         if ( ( not 'username' in flask.request.json ) or
              ( not 'response' in flask.request.json ) ):
-            return flask.jsonify( { 'error': ( 'Login error: username or challenge response missing; '
-                                               ' (you probably can\'t fix this, contact code maintainer) '
-                                              ) } )
+            return ( "Login error: username or challenge response missing"
+                     "(you probably can't fix this, contact code maintainer)" ), 500
         if flask.request.json['username'] != flask.session['username']:
-            return flask.jsonify( { 'error': ( f'username {username} didn\'t match session username '
-                                               '{flask.session["username"]}; try logging out and logging back in '
-                                              ) } )
+            return  ( f"Username {username} didn't match session username {flask.session['username']}; "
+                      f"try logging out and logging back in." ), 500
         if flask.session["authuuid"] != flask.request.json['response']:
-            return flask.jsonify( { 'error': 'Authentication failure.' } )
+            return { 'error': 'Authentication failure.' }
         flask.session['authenticated'] = True
-        return flask.jsonify(
-            { 'status': 'ok',
-              'message': f'User {flask.session["username"]} logged in.',
-              'username': flask.session["username"],
-              'useruuid': str( flask.session["useruuid"] ),
-              'useremail': flask.session["useremail"],
-              'userdisplayname': flask.session["userdisplayname"],
-             } )
+        return { 'status': 'ok',
+                 'message': f'User {flask.session["username"]} logged in.',
+                 'username': flask.session["username"],
+                 'useruuid': str( flask.session["useruuid"] ),
+                 'useremail': flask.session["useremail"],
+                 'userdisplayname': flask.session["userdisplayname"],
+                }
     except Exception as e:
         sys.stderr.write( f'{traceback.format_exc()}\n' )
         return flask.jsonify( { 'error': f'Exception in RespondAuthChallenge: {str(e)}' } )
@@ -131,22 +307,45 @@ def respondchallenge():
 
 @bp.route( '/getpasswordresetlink', methods=['POST'] )
 def getpasswordresetlink():
+    """Email a password reset link to the user.
+
+    POST data JSON dict
+    -------------------
+      username : str (optional)
+         The users's username; may be omitted, but one of username or
+         email must be present.  If passed, email is ignored.
+
+      email : str (optional)
+         The user's email address.  There may be multiple users for each email; if email
+         is passed, multiple email messages will be sent with reset links for all usernames.
+
+    Response
+    --------
+    200 application/json or 500 text/plain
+
+      If successful, returns { 'status': 'Password reset link(s) sent for {usernames}' }
+
+      If failed, returns a 500 with a text error message.
+
+    """
     try:
         if not flask.request.is_json:
-            return flask.jsonify( { 'error': '/auth/getchallenge was expecting application/json' } )
+            return "/auth/getpasswordresetlink was expecting application/json", 500
         if 'username' in flask.request.json:
             username = flask.request.json['username']
             them = db.AuthUser.getbyusername( username );
             if len( them ) == 0:
-                return flask.jsonify( { "error": f"username {username} not known" } )
+                return f"username {username} not known", 500
             if len( them ) > 1:
-                return flask.jsonify( { "error": ( f"username {username} is multiply defined! "
-                                                   "This is bad.  This is very bad." ) } )
+                return f"Error, {username} is multiply defined, database is corrupted", 500
         elif 'email' in flask.request.json:
             email = flask.request.json['email']
             them = db.AuthUser.getbyemail( email )
             if len( them ) == 0:
-                return flask.request.jsonify( { "error": f"email {email} not known" } )
+                return f"email {email} not known", 500
+        else:
+            return "Must include either 'username' or 'email' in POST data", 500
+
         sentto = ""
         for user in them:
             link = db.PasswordLink.new( user.id )
@@ -168,8 +367,9 @@ def getpasswordresetlink():
             msg['Subject'] = RKAuthConfig.email_subject
             msg['From'] = RKAuthConfig.email_from
             msg['To'] = user.email
-            sys.stderr.write( f"webap_url is {webap_url}; RKAuthConfig.webap_url is {RKAuthConfig.webap_url}; "
-                              f"flask.request.base_url is {flask.request.base_url}\n" )
+            flask.current_app.logger.debug(
+                f"webap_url is {webap_url}; RKAuthConfig.webap_url is {RKAuthConfig.webap_url}; "
+                f"flask.request.base_url is {flask.request.base_url}\n" )
             msg.set_content(f"Somebody requested a password reset for {user.username}\n"
                             f"for {RKAuthConfig.email_system_name}.  This link will expire in 1 hour.\n"
                             f"\n"
@@ -182,24 +382,29 @@ def getpasswordresetlink():
             if len(sentto) > 0:
                 sentto += " "
             sentto += user.username
-        return flask.jsonify( { 'status': f'Password reset link(s) sent for {sentto}.' } )
+        return { 'status': f'Password reset link(s) sent for {sentto}.' }
     except Exception as e:
-        sys.stderr.write( f'{traceback.format_exc()}\n' )
-        return flask.jsonify( { 'error': f'Exception in GetPasswordResetLink: {str(e)}' } )
+        flask.current_app.logger.exception( "Exception in getpasswordresetlink" )
+        return f"Exception in getpasswordresetlink: {str(e)}", 500
 
 @bp.route( '/resetpassword', methods=['GET'] )
 def resetpassword():
+    """Prompt user to reset password.
+
+    Call it at /resetpassword?<uuid>
+    where <uuid> is the uuid of the password reset link.
+
+    Spits out an HTML page.
+
+    """
     response = "<!DOCTYPE html>\n"
     response += "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
     response += f"<title>Password Reset</title>\n"
 
-    # webapdirurl = str( pathlib.Path( web.ctx.env['SCRIPT_NAME'] ).parent )
     webapdirurl = str( pathlib.Path( flask.request.path ).parent.parent )
     if webapdirurl[-1] != '/':
         webapdirurl += "/"
-    # sys.stderr.write( f"In ResetPassword, webapdirurl is {webapdirurl}\n" )
-    # response += "<link href=\"" + webapdirurl
-    # response += "photodb.css\" rel=\"stylesheet\" type=\"text/css\">\n"
+    flask.current_app.logger.debug( f"In ResetPassword, webapdirurl is {webapdirurl}\n" )
     response += "<script src=\"" + webapdirurl + "static/resetpasswd_start.js\" type=\"module\"></script>\n"
     response += "</head>\n<body>\n"
     response += f"<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n";
@@ -242,58 +447,81 @@ def resetpassword():
         return flask.make_response( response )
 
 
-# @bp.route( '/getkeys', methods=['POST'] )
-# def getkeys():
-#     try:
-#         if not flask.request.is_json:
-#             return flask.jsonify( { 'error': '/auth/getkeys was expecting application/json' } )
-#         if 'passwordlinkid' not in flask.request.json:
-#             return flask.jsonify( { "error": "No password link id specified" } )
-#         sys.stderr.write( f"flask.request.json['passwordlinkid'] is {flask.request.json['passwordlinkid']}\n" )
-#         link = db.PasswordLink.get( flask.request.json['passwordlinkid'] )
-#         if link is None:
-#             return flask.jsonify( { "error": "Invalid password link id" } )
-#         if link.expires < datetime.datetime.now(pytz.utc):
-#             return flask.jsonify( { "error": "Password reset link has expired" } )
-#         keys = Cryptodome.PublicKey.RSA.generate( 2048 )
-#         return flask.jsonify( { "privatekey": keys.exportKey().decode("UTF-8"),
-#                                 "publickey": keys.publickey().exportKey().decode("UTF-8") } )
-#     except Exception as e:
-#         sys.stderr.write( f'{traceback.format_exc()}\n' )
-#         return flask.jsonify( { "error": f"Exception in GetKeys: {str(e)}" } )
-
 @bp.route( '/changepassword', methods=['POST'] )
 def changepassword():
+    """Change the user's authentication information in the database.
+
+    Removes the password link from the database (making it invalid).
+
+    POST data JSON dictionary
+    -------------------------
+       passwordlinkid : str
+          The uuid of a valid password reset link for this user
+
+       publickey : str
+          PEM spki encoded RSA public key
+
+       privatekey : str
+          base64 encoded encrypted private key in the format that
+          rkauth.js wants
+
+       salt : str
+          base64 encoded binary salt used in converting the user's
+          password to the aes key used to encrypt the user's private
+          key.
+
+       iv : str
+          base64 encoded binary initialization vector used in
+          aes encrypting the users' private key
+
+    Response
+    ---------
+      200 application/json or 500 text/plain
+        If successful, returns { "status": "Password change" }
+        If failed, returns an HTTP 500 with a text error message
+
+    """
     try:
         if not flask.request.is_json:
-            return flask.jsonify( { 'error': '/auth/getkeys was expecting application/json' } )
-        if not "passwordlinkid" in flask.request.json:
-            return flask.jsonify( { "error": "Call to changepassword without passwordlinkid" } )
-        if not "publickey" in flask.request.json:
-            return flask.jsonify( { "error": "Call to changepassword without publickey" } )
-        if not "privatekey" in flask.request.json:
-            return flask.jsonify( { "error": "Call to changepassword without privatekey" } )
-        if not "salt" in flask.request.json:
-            return flask.jsonify( { "error": "Call to changepassword without salt" } )
-        if not "iv" in flask.request.json:
-            return flask.jsonify( { "error": "Call to changepassword without iv" } )
+            return "Error, /auth/changepassword was expecting application/json", 500
+        for key in [ "passwordlinkid", "publickey", "privatekey", "salt", "iv" ]:
+            if not key in flask.request.json:
+                return f"Error, call to changepassword without {key}"
 
-        with db.DB.get() as dbsess:
-            pwlink = db.PasswordLink.get( flask.request.json['passwordlinkid'], curdb=dbsess )
-            user = db.AuthUser.get( pwlink.userid, curdb=dbsess )
+        with db.DBSession() as dbsess:
+            pwlink = db.PasswordLink.get( flask.request.json['passwordlinkid'], session=dbsess )
+            user = db.AuthUser.get( pwlink.userid, session=dbsess )
             user.pubkey = flask.request.json['publickey']
-            user.privkey = flask.request.json['privatekey']
-            user.salt = flask.request.json['salt']
-            user.iv = flask.request.json['iv']
-            dbsess.db.delete( pwlink )
-            dbsess.db.commit()
-            return flask.jsonify( { "status": "Password changed" } )
+            user.privkey = { 'privkey': flask.request.json['privatekey'],
+                             'salt': flask.request.json['salt'],
+                             'iv': flask.request.json['iv'] }
+            dbsess.delete( pwlink )
+            dbsess.commit()
+            return { "status": "Password changed" }
     except Exception as e:
-        sys.stderr.write( f'{traceback.format_exc()}\n' )
-        return flask.jsonify( { 'error': f'Exception in ChangePassword: {str(e)}' } )
+        flask.current_app.logger.exception( "Exception in changepassword" )
+        return f"Exception in changepassword: {str(e)}", 500
+
 
 @bp.route( '/isauth', methods=['POST'] )
 def isauth():
+    """Return authentcation information about current session.
+
+    Response
+    --------
+    200 application/json
+      If the user is authenticated in the session, then returns:
+        { "status": True,
+          "username": str,          # username of authenticated user
+          "useruuid": str,          # database primary key of authenticated user
+          "useremail": str,         # email of authenticated user
+          "userdisplayname": str    # display name of authenticated user
+        }
+
+      If the user is not authenticated, returns { "status": False }
+
+    """
+
     if ( 'authenticated' in flask.session ) and ( flask.session['authenticated'] ):
         return flask.jsonify( { 'status': True,
                                 'username': flask.session["username"],
@@ -307,11 +535,17 @@ def isauth():
 
 @bp.route( '/logout', methods=['POST'] )
 def logout():
+    """Removes authentication information from session.
+
+    Response
+    --------
+    200 applcation/json
+        { "status": "Logged out" }
+
+    """
     flask.session['authenticated'] = False
     del flask.session['username']
     del flask.session['useruuid']
     del flask.session['useremail']
     del flask.session['userdisplayname']
     return flask.jsonify( { 'status': 'Logged out' } )
-    
-    

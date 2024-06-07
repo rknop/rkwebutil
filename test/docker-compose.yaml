@@ -1,5 +1,3 @@
-version: "3.3"
-
 services:
   postgres:
     image: rknop/rkwebutil_test_postgres
@@ -21,9 +19,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    image: rknop/rkwebutil_test_webserver
+    image: rknop/rkwebutil_test_flaskserver
     build:
-      context: docker_webserver
+      context: docker_flaskserver
     environment:
       DB_NAME: test_rkwebutil
       DB_HOST: postgres
@@ -36,9 +34,9 @@ services:
       - python3 /usr/src/createdb.py
 
   makeinstall:
-    image: rknop/rkwebutil_test_webserver
+    image: rknop/rkwebutil_test_flaskserver
     build:
-      context: docker_webserver
+      context: docker_flaskserver
     environment:
       DB_NAME: test_rkwebutil
       DB_HOST: postgres
@@ -49,44 +47,47 @@ services:
       - type: bind
         source: ../
         target: /rkwebutil_src
+      # - type: bind
+      #   source: test_install/html
+      #   target: /var/www/html
       - type: bind
-        source: test_install/html
+        source: test_install/flask
         target: /var/www/html
     entrypoint:      
       - /bin/bash
       - -c
       - |
-        make -C /rkwebutil_src/test/docker_webserver install
         make -C /rkwebutil_src/test/docker_flaskserver install
+        # make -C /rkwebutil_src/test/docker_webserver install
 
   mailhog:
     image: mailhog/mailhog:latest
     ports:
         - "8025:8025"
 
-  webserver:
-    depends_on:
-      createdb:
-        condition: service_completed_successfully
-      makeinstall:
-        condition: service_completed_successfully
-      mailhog:
-        condition: service_started
-    image: rknop/rkwebutil_test_webserver
-    build:
-      context: docker_webserver
-    volumes:
-      - type: bind
-        source: test_install/html
-        target: /var/www/html
-    environment:
-      DB_NAME: test_rkwebutil
-      DB_HOST: postgres
-      DB_USER: postgres
-      DB_PASS: fragile
-      DB_PORT: 5432
-    ports:
-      - "8080:8080"
+  # webserver:
+  #   depends_on:
+  #     createdb:
+  #       condition: service_completed_successfully
+  #     makeinstall:
+  #       condition: service_completed_successfully
+  #     mailhog:
+  #       condition: service_started
+  #   image: rknop/rkwebutil_test_webserver
+  #   build:
+  #     context: docker_webserver
+  #   volumes:
+  #     - type: bind
+  #       source: test_install/html
+  #       target: /var/www/html
+  #   environment:
+  #     DB_NAME: test_rkwebutil
+  #     DB_HOST: postgres
+  #     DB_USER: postgres
+  #     DB_PASS: fragile
+  #     DB_PORT: 5432
+  #   ports:
+  #     - "8080:8080"
 
   flaskserver:
     depends_on:
@@ -96,6 +97,11 @@ services:
         condition: service_completed_successfully
       mailhog:
         condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8081 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
     image: rknop/webutil_test_flaskserver
     build:
       context: docker_flaskserver
@@ -117,10 +123,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      webserver:
-        condition: service_started
+      # webserver:
+      #   condition: service_started
       flaskserver:
-        condition: service_started
+        condition: service_healthy
     image: rknop/rkwebutil_test
     build:
       context: docker_test
@@ -131,14 +137,15 @@ services:
       - type: bind
         source: ../
         target: /rkwebutil_src
+    working_dir: /rkwebutil_src
     entrypoint: [ "tail", "-f", "/etc/issue" ]
 
   runtests:
     depends_on:
       postgres:
         condition: service_healthy
-      webserver:
-        condition: service_started
+      # webserver:
+      #   condition: service_started
       flaskserver:
         condition: service_started
     image: rknop/rkwebutil_test

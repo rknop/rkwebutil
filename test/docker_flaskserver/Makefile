@@ -3,7 +3,7 @@ INSTALLDIR = ../test_install/flask
 INSTALL_HERE = server.py ap/__init__.py  ap/db.py ap/static/ap.css ap/static/ap.js ap/static/ap_start.js \
 	ap/templates/base.html ap/templates/ap.html
 INSTALL_PARENT = flaskauth.py
-INSTALL_PARENT_STATIC = aes.js jsencrypt.min.js resetpasswd_start.js rkauth.js rkwebutil.js
+INSTALL_PARENT_STATIC = resetpasswd_start.js rkauth.js rkwebutil.js
 
 
 install : $(patsubst %, $(INSTALLDIR)/%, $(INSTALL_HERE))

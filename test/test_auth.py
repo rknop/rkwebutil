@@ -1,19 +1,8 @@
 # This file is part of rkwebutil
 #
-# rkwebutil is Copyright 2023 by Robert Knop
+# rkwebutil is Copyright 2023-2024 by Robert Knop
 #
-# rkwebutil is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# rkwebutil is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-# FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
-# for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with rkwebutil. If not, see <https://www.gnu.org/licenses/>.
+# rkwebutil is free software, available under the BSD 3-clause license (see LICENSE)
 
 import re
 import time
@@ -37,6 +26,8 @@ class AuthTestBase:
         opts = selenium.webdriver.FirefoxOptions()
         opts.add_argument( "--headless" )
         ff = selenium.webdriver.Firefox( options=opts )
+        # Need this next one since the test env. uses a self-signed cert
+        ff.accept_untrusted_certs = True
         yield ff
         ff.close()
         ff.quit()
@@ -209,7 +200,7 @@ class AuthTestBase:
         time.sleep(1)
         button.click()
         alert = WebDriverWait( browser, timeout=10 ).until( expected_conditions.alert_is_present() )
-        assert alert.text == "No such user no_such_user"
+        assert alert.text == "HTTP status 500 : No such user no_such_user"
         alert.dismiss()
 
     def test_no_password( self, browser, load_frontpage ):
@@ -224,7 +215,7 @@ class AuthTestBase:
         time.sleep(1)
         button.click()
         alert = WebDriverWait( browser, timeout=10 ).until( expected_conditions.alert_is_present() )
-        assert alert.text == "User test does not have a password set yet."
+        assert alert.text == "HTTP status 500 : User test does not have a password set yet"
         alert.dismiss()
 
     def test_request_reset( self, browser, click_password_reset ):
@@ -253,7 +244,7 @@ class AuthTestBase:
         rows = cursor.fetchall()
         assert len(rows) == 1
         assert len(rows[0]['pubkey']) > 20
-        assert len(rows[0]['privkey']) > 20
+        assert set(rows[0]['privkey']) == { 'salt', 'iv', 'privkey' }
         cursor.execute( "SELECT * FROM passwordlink" )
         assert cursor.rowcount == 0
 
@@ -283,8 +274,8 @@ class AuthTestBase:
         assert h2.text == "Not Logged In"
 
 
-class TestWebpyAuth(AuthTestBase):
-    url = "http://webserver:8080/ap.py/"
+# class TestWebpyAuth(AuthTestBase):
+#     url = "http://webserver:8080/ap.py/"
 
 class TestFlaskAuth(AuthTestBase):
-    url = "http://flaskserver:8081/"
+    url = "https://flaskserver:8081/"

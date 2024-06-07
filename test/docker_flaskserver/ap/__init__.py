@@ -7,7 +7,8 @@ from . import db
 
 def create_app():
     app = flask.Flask(  __name__ )
-    app.logger.setLevel( logging.INFO )
+    # app.logger.setLevel( logging.INFO )
+    app.logger.setLevel( logging.DEBUG )
     app.config.from_mapping(
         SECRET_KEY='blah',
         SESSION_COOKIE_PATH='/',
@@ -20,7 +21,7 @@ def create_app():
 
     server_session = flask_session.Session( app )
 
-    db.DB.setdbparams( 'postgres', 'fragile', 'postgres', 5432, 'test_rkwebutil' )
+    db.setdbparams( 'postgres', 'fragile', 'postgres', 5432, 'test_rkwebutil' )
     
     from . import flaskauth
     flaskauth.RKAuthConfig.email_from = 'rkwebutil test <nobody@nowhere.org>'
@@ -31,9 +32,9 @@ def create_app():
     flaskauth.RKAuthConfig.smtp_use_ssl = False
     flaskauth.RKAuthConfig.smtp_username = None
     flaskauth.RKAuthConfig.smtp_password = None
-    flaskauth.RKAuthConfig.webap_url = 'http://flaskserver:8081/auth'
-    # A truly bizarre thing -- the db.DB class inside flaskauth is *not*
-    #   the same as the db.DB class here.  I don't really get that, but
+    flaskauth.RKAuthConfig.webap_url = 'https://flaskserver:8081/auth'
+    # A truly bizarre thing -- the db global variables inside flaskauth
+    #   are *not* the same as the global db variables here.  I don't really get that, but
     #   flask must do something weird with its blueprints.  Effectively,
     #   that means I have to initialize the DB in flaskauth separately
     flaskauth.RKAuthConfig.setdbparams( 'postgres', 'fragile', 'postgres', 5432, 'test_rkwebutil' )

@@ -1,21 +1,9 @@
 /**
  * This file is part of rkwebutil
  *
- * rkwebutil is Copyright 2023 by Robert Knop
+ * rkwebutil is Copyright 2023-2024 by Robert Knop
  *
- * rkwebutil is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * rkwebutil is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
- * for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with rkwebutil. If not, see <https://www.gnu.org/licenses/>.
- *
+ * rkwebutil is free software under the BSD 3-clause license (see LICENSE)
  */
 
 var rkWebUtil = {}
@@ -378,123 +366,125 @@ rkWebUtil.colorIntToCSSColor = function( colint ) {
 // **********************************************************************
 // Class for connecting to a given web server
 
-rkWebUtil.Connector = function( app )
+rkWebUtil.Connector = class
 {
-    this.app = app;
-}
+    constructor( app )
+    {
+        this.app = app;
+    }
 
-// **********************************************************************
-// Utility function used in HTTP request callbacks to make
-//  sure the data is in.  Returns false if the data is not in,
-//  returns true if it is.  Returns null if there
-//  was an error (including non-JSON response).
-//
-// errorhandler is a function that takes a single argument
-// that argument will have property "error" which is a string message
+    // **********************************************************************
+    // Utility function used in HTTP request callbacks to make
+    //  sure the data is in.  Returns false if the data is not in,
+    //  returns true if it is.  Returns null if there
+    //  was an error (including non-JSON response).
+    //
+    // errorhandler is a function that takes a single argument
+    // that argument will have property "error" which is a string message
 
-rkWebUtil.Connector.prototype.waitForJSONResponse = function( request, errorhandler=null )
-{
-    var type;
+    waitForJSONResponse( request, errorhandler=null )
+    {
+        var type;
 
-    // console.log( "request.readyState = " + request.readyState +
-    //              ", request.stauts = " + request.status );
-    if (request.readyState === 4 && request.status === 200) {
-        type = request.getResponseHeader("Content-Type");
-        if (type === "application/json")
-        {
-            return true;
+        // console.log( "request.readyState = " + request.readyState +
+        //              ", request.stauts = " + request.status );
+        if (request.readyState === 4 && request.status === 200) {
+            type = request.getResponseHeader("Content-Type");
+            if (type === "application/json")
+            {
+                return true;
+            }
+            else
+            {
+                if ( errorhandler != null ) {
+                    errorhandler( { "error": "Request didn't return JSON, instead returned " + type }  );
+                }
+                else {
+                    window.alert("Request didn't return JSON.  Everything is broken.  Panic.");
+                }
+                return null;
+            }
         }
-        else
-        {
+        else if (request.readyState == 4) {
             if ( errorhandler != null ) {
-                errorhandler( { "error": "Request didn't return JSON" }  );
+                errorhandler( { "error": "HTTP status " + request.status + " : " + request.responseText } );
             }
             else {
-                window.alert("Request didn't return JSON.  Everything is broken.  Panic.");
+                window.alert("Error, got back HTTP status " + request.status + " : " + request.responseText );
             }
             return null;
         }
-    }
-    else if (request.readyState == 4) {
-        if ( errorhandler != null ) {
-            errorhandler( { "error": "Got back HTTP status " + request.status } );
-        }
         else {
-            window.alert("Woah, got back status " + request.status + ".  Everything is broken.  Panic.");
+            return false;
         }
-        return null;
     }
-    else {
-        return false;
+
+    // **********************************************************************
+    // Utility funciton to create and send an XMLHttpRequest, and wait
+    // for it to be fully finished before calling the handler.
+    //   appcommand -- the thing after the webapp, e.g. "/getquestionset"
+    //   data -- an object to be converted with JSON.stringify and sent
+    //   handler -- a function to be called when the request has fully returned
+    //              it will have one argument, the data from the request
+    //   errorhandler -- a function that takes a single argument that will
+    //                   have property "error" which is a string message
+    //
+    //   finalcall --  function that has takes no arguments that will always
+    //                 be called (think "finally" from a try/catch/finally block).
+
+
+    sendHttpRequest( appcommand, data, handler, errorhandler=null, finalcall=null )
+    {
+        let self = this;
+        let req = new XMLHttpRequest();
+        req.open( "POST", this.app + appcommand );
+        req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler=errorhandler,
+                                                                      finalcall=finalcall ) };
+        req.setRequestHeader( "Content-Type", "application/json" );
+        req.send( JSON.stringify( data ) );
     }
-}
-
-// **********************************************************************
-// Utility funciton to created and send an XMLHttpRequest, and wait
-// for it to be fully finished before calling the handler.
-//   appcommand -- the thing after the webapp, e.g. "/getquestionset"
-//   data -- an object to be converted with JSON.stringify and sent
-//   handler -- a function to be called when the request has fully returned
-//              it will have one argument, the data from the request
-//   errorhandler -- a function that takes a single argument that will
-//                   have property "error" which is a string message
-//
-//   finalcall --  function that has takes no arguments that will always
-//                 be called (think "finally" from a try/catch/finally block).
 
 
-rkWebUtil.Connector.prototype.sendHttpRequest = function( appcommand, data, handler, errorhandler=null, finalcall=null )
-{
-    let self = this;
-    let req = new XMLHttpRequest();
-    req.open( "POST", this.app + appcommand );
-    req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler=errorhandler,
-                                                                  finalcall=finalcall ) };
-    req.setRequestHeader( "Content-Type", "application/json" );
-    req.send( JSON.stringify( data ) );
-}
-
-rkWebUtil.Connector.prototype.sendHttpRequestMultipartForm = function( appcommand, formdata,
-                                                                       handler, errorhandler=null,
-                                                                       finalcall=null )
-{
-    let self = this;
-    let req = new XMLHttpRequest();
-    req.open( "POST", this.app + appcommand );
-    req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler, finalcall ) };
-    req.send( formdata );
-}
-
-rkWebUtil.Connector.prototype.catchHttpResponse = function( req, handler, errorhandler=null, finalcall=null )
-{
-    let jsonstate = this.waitForJSONResponse( req, errorhandler, finalcall );
-    if ( ( jsonstate == null ) && ( finalcall != null) ) {
-        finalcall();
-        return;
+    sendHttpRequestMultipartForm( appcommand, formdata, handler, errorhandler=null, finalcall=null )
+    {
+        let self = this;
+        let req = new XMLHttpRequest();
+        req.open( "POST", this.app + appcommand );
+        req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler, finalcall ) };
+        req.send( formdata );
     }
-    if ( !jsonstate ) return;
 
-    try {
-        var statedata = JSON.parse( req.responseText );
-    } catch (err) {
-        window.alert( "Error parsing JSON! (" + err + ")" );
-        console.trace();
-        console.log( req.responseText );
+    catchHttpResponse( req, handler, errorhandler=null, finalcall=null )
+    {
+        let jsonstate = this.waitForJSONResponse( req, errorhandler, finalcall );
+        if ( ( jsonstate == null ) && ( finalcall != null) ) {
+            finalcall();
+            return;
+        }
+        if ( !jsonstate ) return;
+
+        try {
+            var statedata = JSON.parse( req.responseText );
+        } catch (err) {
+            window.alert( "Error parsing JSON! (" + err + ")" );
+            console.trace();
+            console.log( req.responseText );
+            if ( finalcall != null ) finalcall();
+            return;
+        }
+        if ( statedata.hasOwnProperty( "error" ) ) {
+            if ( errorhandler != null ) {
+                errorhandler( statedata );
+            }
+            else {
+                window.alert( 'Error return: ' + statedata.error );
+            }
+            if ( finalcall != null ) finalcall();
+            return;
+        }
+        handler( statedata );
         if ( finalcall != null ) finalcall();
-        return;
     }
-    if ( statedata.hasOwnProperty( "error" ) ) {
-        if ( errorhandler != null ) {
-            errorhandler( statedata );
-        }
-        else {
-            window.alert( 'Error return: ' + statedata.error );
-        }
-        if ( finalcall != null ) finalcall();
-        return;
-    }
-    handler( statedata );
-    if ( finalcall != null ) finalcall();
 }
 
 // **********************************************************************

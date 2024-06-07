@@ -1,113 +1,83 @@
 from datetime import datetime, timedelta
+from contextlib import contextmanager
 import dateutil.parser
 import pytz
 import uuid
 import sqlalchemy
+import sqlalchemy.orm.session
 import sqlalchemy.ext.declarative
 import sqlalchemy.pool
 from sqlalchemy.dialects.postgresql import UUID as sqlUUID
+from sqlalchemy.dialects.postgresql import JSONB
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
+_user = None
+_password = None
+_host = None
+_port = None
+_database = None
+_engine = None
+_sessionfac = None
+
 # ======================================================================
+# Database initialization
 
-class DB(object):
-    """An object that encapsulates a SQLAlchemy / Postgres DB connection.
+def setdbparams( user, password, host, port, database ):
+    global _user, _password, _host, _port, _database
+    _user = user
+    _password = password
+    _host = host
+    _port = port
+    _database = database
+
+# ======================================================================
+# Getting a session, recycling the passed one if not None, otherwise
+#   automatically closing the one created when done.
+
+@contextmanager
+def DBSession( cur=None ):
+    global _engine, _sessionfac, _user, _password, _host, _port, _database
     
-    Get one by calling dbo=DB.get(current_dbo), where current_dbo is
-    either None or a DB object.  You can call tll DB.get as part of a
-    with statement ( "with DB.get(current_dbo) as dbo:" )
+    if cur is not None:
+        if not isinstance( cur, sqlalchemy.orm.session.Session ):
+            raise TypeError( "Must pass a SQLAlchemy session, or None, to DBSession" )
+        yield cur
+        return
 
-    Call dbo.close() when done; this happens automatically if the object
-    was created at the start of a with block.
+    if _engine is None:
+        if any( [ _user is None, _password is None, _host is None, _port is None, _database is None ] ):
+            raise RuntimeError( "Must initialize database with setdbparams before calling DBSession)" )
+        _engine = sqlalchemy.create_engine( f'postgresql://{_user}:{_password}@{_host}:{_port}/{_database}',
+                                            poolclass=sqlalchemy.pool.NullPool )
+        _sessionfac = sqlalchemy.orm.sessionmaker( bind=_engine, expire_on_commit=False )
 
-    Once you have the object, the db field is the SQLAlchemy session.
-
-    Before the first call to DB.get(), must call DB.setdbparams() with all arguments.
-
-    """
-    _engine = None
-    _sessionfac = None
-    _dbparamsset = False
-    
-    @classmethod
-    def setdbparams( cls, user, password, host, port, database ):
-        cls._user = user
-        cls._password = password
-        cls._host = host
-        cls._port = port
-        cls._database = database
-        cls._dbparamsset = True
-    
-    @classmethod
-    def DBinit( cls ):
-        if cls._engine is None:
-            if not cls._dbparamsset:
-                # Uncomment this next line, and comment out the
-                #  exception, if you've replaced setdbparams() with
-                #  something that has defaults
-                # cls.setdbparams()
-                raise RuntimeError( "DB Parameters not set." )
-            cls._engine = sqlalchemy.create_engine(f'postgresql://{cls._user}:{cls._password}@{cls._host}:{cls._port}'
-                                                   f'/{cls._database}', poolclass=sqlalchemy.pool.NullPool )
-            # ROB -- remove the following line?
-            # DeferredReflection.prepare( DB._engine )
-            cls._sessionfac = sqlalchemy.orm.sessionmaker( bind=cls._engine, expire_on_commit=False )
-
-    @staticmethod
-    def get( dbo=None ):
-        """Get a DB object.
-        
-        dbo - either a DB object, or None.  If None, creates a new
-        SQLAlchmey session, which is then available in the db field of
-        the returned DB object.  If not None, returns a DB object that
-        has the same SQLAlchemy session as the passed DB object.
-
-        """
-        if dbo is None:
-            return DB()
-        else:
-            return DB( dbo.db )
-
-    def __init__( self, db=None ):
-        """Never call this directly; call DB.get()"""
-
-        self.mustclose = False
-        if db is None:
-            if DB._engine is None:
-                DB.DBinit()
-            self.db = DB._sessionfac()
-            self.mustclose = True
-        else:
-            self.db = db
-
-    def __enter__( self ):
-        return self
-
-    def __exit__( self, exc_type, exc_val, exc_tb ):
-        self.close()
-            
-    def __del__( self ):
-        self.close()
-
-    def close( self ):
-        """Call this when done with the DB object.  This gets called automatically if DB.get() was in a with statement."""
-        if self.mustclose and self.db is not None:
-            self.db.close()
-            self.db = None
+    session = _sessionfac()
+    yield session
+    session.close()
 
 # ======================================================================-
 # Utility functions
 
-NULLUUID = uuid.UUID( '00000000-0000-0000-0000-000000000000' )
+_NULLUUID = uuid.UUID( '00000000-0000-0000-0000-000000000000' )
 
 def asUUID( val, canbenone=True ):
-    """Pass either None, as tring, or a uuid.UUID.  Return either None or uuid.UUID.
-    
-    If canbenone is True, passing None returns None.  Otherwise, passing None returns
-    uuid.UUID('00000000-0000-0000-0000-000000000000').
+    """Convert a string to uuid.UUID.
 
     Will throw a ValueError if val isn't properly formatted.
+
+    Parameters
+    -----------
+      val : str or uuid.UUID
+        The UUID to convert.  If val is a uuid.UUID, then it just returns val.
+
+      canbenone : bool, default True
+        If True, returns None when val is None.  If False, when val is None,
+        returns uuid.UUID('00000000-0000-0000-0000-000000000000').
+
+    Returns
+    -------
+      uuid.UUID or None
     
     """
 
@@ -115,20 +85,29 @@ def asUUID( val, canbenone=True ):
         if canbenone:
             return None
         else:
-            return NULLUUID
+            return _NULLUUID
     if isinstance( val, uuid.UUID ):
         return val
     else:
         return uuid.UUID( val )
 
+
 def asDateTime( string ):
-    """Pass either a datetime.datetime or a string.  Returns a datetime.datetime.
-    
-    If a string, must be something that dateutil.parser.parse can handle.
+    """Convert a string to a datetime.datetime
 
     Doesn't do anything to take care of timezone aware vs. timezone
     unaware dates.  It probably should.  Dealing with that is always a
     nightmare.
+
+    Parameters
+    ----------
+      string: str or datetime.datetime
+        If a datetime.datetime, just rturns the argument.  Otherwise,
+        string must be something that dateutil.parser.pasre can handle.
+
+    Returns
+    -------
+      datetime.datetime
 
     """
 
@@ -162,16 +141,13 @@ class AuthUser(Base):
     displayname = sqlalchemy.Column( sqlalchemy.Text, nullable=False )
     email = sqlalchemy.Column( sqlalchemy.Text, nullable=False, index=True )
     pubkey = sqlalchemy.Column( sqlalchemy.Text )
-    privkey = sqlalchemy.Column( sqlalchemy.Text )
-    salt = sqlalchemy.Column( sqlalchemy.Text )
-    iv = sqlalchemy.Column( sqlalchemy.Text )
-    lastlogin = sqlalchemy.Column( sqlalchemy.DateTime(timezone=True), default=None )
+    privkey = sqlalchemy.Column( JSONB )
     
     @classmethod
-    def get( cls, id, curdb=None, cfg=None ):
+    def get( cls, id, session=None ):
         id = id if isinstance( id, uuid.UUID) else uuid.UUID( id )
-        with DB.get( curdb ) as db:
-            q = db.db.query(cls).filter( cls.id==id )
+        with DBSession( session ) as sess:
+            q = sess.query(cls).filter( cls.id==id )
             if q.count() > 1:
                 raise ErrorMsg( f'Error, {cls.__name__} {id} multiply defined!  This shouldn\'t happen.' )
             if q.count() == 0:
@@ -179,15 +155,15 @@ class AuthUser(Base):
             return q[0]
 
     @classmethod
-    def getbyusername( cls, name, curdb=None ):
-        with DB.get( curdb ) as db:
-            q = db.db.query(cls).filter( cls.username==name )
+    def getbyusername( cls, name, session=None ):
+        with DBSession( session ) as sess:
+            q = sess.query(cls).filter( cls.username==name )
             return q.all()
 
     @classmethod
-    def getbyemail( cls, email, curdb=None ):
-        with DB.get( curdb ) as db:
-            q = db.db.query(cls).filter( cls.email==email )
+    def getbyemail( cls, email, session=None ):
+        with DBSession( session ) as sess:
+            q = sess.query(cls).filter( cls.email==email )
             return q.all()
 
 # ======================================================================
@@ -196,26 +172,28 @@ class PasswordLink(Base):
     __tablename__ = "passwordlink"
 
     id = sqlalchemy.Column( sqlUUID(as_uuid=True), primary_key=True, default=uuid.uuid4 )
-    userid = sqlalchemy.Column( sqlUUID(as_uuid=True), sqlalchemy.ForeignKey("authuser.id", ondelete="CASCADE"), index=True )
+    userid = sqlalchemy.Column( sqlUUID(as_uuid=True),
+                                sqlalchemy.ForeignKey("authuser.id", ondelete="CASCADE"),
+                                index=True )
     expires = sqlalchemy.Column( sqlalchemy.DateTime(timezone=True) )
     
     @classmethod
-    def new( cls, userid, expires=None, curdb=None ):
+    def new( cls, userid, expires=None, session=None ):
         if expires is None:
             expires = datetime.now(pytz.utc) + timedelta(hours=1)
         else:
             expires = asDateTime( expires )
-        with DB.get(curdb) as db:
+        with DBSession( session ) as sess:
             link = PasswordLink( userid = asUUID(userid),
                                  expires = expires )
-            db.db.add( link )
-            db.db.commit()
+            sess.add( link )
+            sess.commit()
             return link
 
     @classmethod
-    def get( cls, uuid, curdb=None ):
-        with DB.get(curdb) as dbo:
-            q = dbo.db.query( PasswordLink ).filter( PasswordLink.id==uuid )
+    def get( cls, uuid, session=None ):
+        with DBSession( session ) as sess:
+            q = sess.query( PasswordLink ).filter( PasswordLink.id==uuid )
             if q.count() == 0:
                 return None
             else:
