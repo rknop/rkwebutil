@@ -532,7 +532,7 @@ def isauth():
         return flask.jsonify( { 'status': False } );
 
 
-@bp.route( '/logout', methods=['POST'] )
+@bp.route( '/logout', methods=['GET','POST'] )
 def logout():
     """Removes authentication information from session.
 

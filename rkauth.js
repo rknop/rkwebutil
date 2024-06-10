@@ -72,29 +72,6 @@ var rkAuth = function( authdiv, webapurl, isauthcallback,
 
 // **********************************************************************
 
-rkAuth.CryptoJSformatter = {
-    stringify: function( cipherParams ) {
-        var jsonobj = { ct: cipherParams.ciphertext.toString( CryptoJS.enc.Base64 ) };
-        if ( cipherParams.iv )
-            jsonobj.iv = cipherParams.iv.toString();
-        if ( cipherParams.salt )
-            jsonobj.salt = cipherParams.salt.toString();
-        return JSON.stringify( jsonobj );
-    },
-    parse: function( jsontext ) {
-        var jsonobj = JSON.parse( jsontext );
-        var cipherParams = CryptoJS.lib.CipherParams.create(
-            { ciphertext: CryptoJS.enc.Base64.parse( jsonobj.ct ) } );
-        if ( jsonobj.iv )
-            cipherParams.iv = CryptoJS.enc.Hex.parse( jsonobj.iv );
-        if ( jsonobj.salt )
-            cipherParams.salt = CryptoJS.enc.Hex.parse( jsonobj.salt );
-        return cipherParams;
-    }
-};
-
-// **********************************************************************
-
 rkAuth.prototype.checkAuth = function( isauthcallback=null, isnotauthcallback=null ) {
     let self = this
     this.conn.sendHttpRequest( "/auth/isauth", null,
@@ -245,13 +222,15 @@ rkAuth.prototype.processChallenge = async function( retdata, password ) {
         const aeskey = await this.getAESKey( password, salt, iv );
         // ****
         // Need to make the exportable true in getAESKey() for this to work
-        // const encaeskey = await crypto.subtle.exportKey( "jwk", aeskey );
+        // const encaeskey = await crypto.subtle.exportKey( "jwk", aeskey );  // "jwk"
         // console.log( "Decrypted aeskey = " + JSON.stringify( encaeskey, null, 4 ) );
         // ****
         const privkeybytes = new Uint8Array(
             await crypto.subtle.decrypt( { "name": "AES-GCM", "iv": iv }, aeskey,
                                          rkWebUtil.b64decode( retdata.privkey ) )
         );
+        // console.log( "privkeybytes: " + privkeybytes );
+        // console.log( "length: " + privkeybytes.length );
         const privkey = await crypto.subtle.importKey( "pkcs8", privkeybytes,
                                                        { "name": "RSA-OAEP", "hash": "SHA-256" },
                                                        false,

@@ -52,3 +52,5 @@ No user passwords are stored server-side, nor are transmitted during authenticat
 When a user's password is reset, a RSA public and private key are generated client side on the user's browser.  The private key is then encrypted using an AES key generated from the user's password.  The RSA public key, the encrypted key, and the salt and initialization vector used in creating the AES key are all sent to the server.  The private key is never sent over the internet unencrypted, and the password is never sent over the internet.
 
 Password resets are handled by creating a random link (a v4 uuid) that expires after 1 hour.  This link is sent to the email address that the database has for that user.  A user going to that link is able to reset their password.  This does mean, as with all systems that send password reset links through email, that user accounts can be hijacked by intercepting the email.
+
+TODO : web ap ways to add and delete users.  Deleting the users should also remove any sessions attached to those users.  (Right now, users are added and removed by just poking at the SQL database directly.)
