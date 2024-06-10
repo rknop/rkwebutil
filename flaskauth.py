@@ -99,7 +99,6 @@
 #     email (text)
 #     pubkey (text)
 #     privkey (postgres JSONB)
-#     lastlogin (DaeTime(timezone=True))
 #
 #   methods:
 #      @classmethod
