@@ -567,6 +567,15 @@ rkWebUtil.Connector = class
     {
         let self = this;
         let req = new XMLHttpRequest();
+        // Try to work around a common usage issue.  A double slash at
+        //   the beginning will be interpreted by the browser as
+        //   https:// rather than just as / -- that is, if this.app is
+        //   "/" and appcommand is "/status", it will try to load
+        //   "https://status" rather than "/status", which will break
+        //   (due to cross-site scripting restrinctions, never mind
+        //   "status" not existing as a server).
+        if ( ( this.app.substring( this.app.length -1 ) == '/' ) && ( appcommand.substring( 0 , 1 ) == '/' ) )
+            appcommand = appcommand.substring( 1 )
         req.open( "POST", this.app + appcommand );
         req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler=errorhandler,
                                                                       finalcall=finalcall ) };
