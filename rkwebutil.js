@@ -156,6 +156,41 @@ rkWebUtil.parseStandardDateString = function( datestring )
 }
 
 // **********************************************************************
+// This one is a bit hacky.  I'm assming that javascript is able to
+// parse ISO dates, and that it will parse something with a "Z" at the
+// end as a UTC date.  This function assumes that the string is coming
+// in exactly as YYYY-MM-DD HH:MM:SS (with possibly a T in place of the
+// middle space).
+//
+// It returns a Date object, which is in the *local* time zone
+// (always... because JavaScript irritatingly seems to assume you'd
+// never want to do anything else), but if you later do something like
+// .getUTCHours() or call my MJD function, it should do the right thing.
+
+rkWebUtil.parseDateAsUTC = function( datestring )
+{
+    datestring = datestring.trim();
+    let utcdex = datestring.search( / *UTC$/ );
+    if ( utcdex >= 0 ) datestring = datestring.substring( 0, utcdex );
+    let zdex = datestring.search( / *Z$/ );
+    if ( zdex >= 0 ) datestring = datestring.substring( 0, zdex );
+    let pmdex = datestring.search ( / *[\+\-][0-9]+$/ );
+    const pmre = / *[\+\-]([0-9]+)$/;
+    let match = pmre.exec( datestring );
+    if ( match != null ) {
+        if ( parseFloat( match[1] ) != 0 )
+            throw "Error, enter UTC times";
+        datestring = datestring.substring( 0, match.index );
+    }
+
+    let timestamp = Date.parse( datestring + "Z" );
+    if ( isNaN( timestamp ) ) {
+        throw "Error parsing date/time " + datestring;
+    }
+    return new Date( timestamp );
+}
+
+// **********************************************************************
 
 rkWebUtil.dateFormat = function(date)
 {
