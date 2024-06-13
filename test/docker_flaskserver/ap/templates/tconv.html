@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}RKWebUtil MJD Conversion Test{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='ap.css') }}">
+<script src="{{ url_for('static', filename='tconv.js') }}" type="module") ></script>
+<script src="{{ url_for('static', filename='tconv_start.js') }}" type="module"></script>
+{% endblock %}
+
+{% block body %}
+<div id="main-div">
+<p><input id="mjd" value="" size=20 /><button id="convmjd">Convert MJD to Date</button></p>
+<p><input id="date" value="" size=20 /><button id="convdate">Convert Date to MJD</button> (YYYY-MM-DDTHH:MM:SSZ)</p>
+</div>
+{% endblock %}

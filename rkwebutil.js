@@ -216,6 +216,136 @@ rkWebUtil.validateWidgetDate = function( datestr ) {
         + String(date.getUTCSeconds()).padStart( 2, '0') + "+00";
 }
 
+rkWebUtil.mjdOfDate = function( date ) {
+    let y = date.getUTCFullYear();
+    let m = date.getUTCMonth() + 1;
+    let d = date.getUTCDate();
+    let h = date.getUTCHours();
+    let minute = date.getUTCMinutes();
+    let s = date.getUTCSeconds();
+    let ms = date.getUTCMilliseconds();
+
+    // Trusting wikipedia, which says with integer division (meaning -2.5/2 = -1, not -2)
+    // JDN = (1461 × (Y + 4800 + (M − 14)/12))/4 +(367 × (M − 2 − 12 × ((M − 14)/12)))/12 − (3 × ((Y + 4900 + (M - 14)/12)/100))/4 + D − 32075
+    // and (with float division):
+    // JD = JDN + (hour-12)/24. + minute/1440. + second/86400.
+
+    // Eric Weisstein's World of Astronomy says, for AD Gregorian dates:
+    // JD = 367Y - INT(7(Y + INT((M+9)/12))/4)
+    //      -INT(3(INT((Y + (M-9)/7)/100) + 1)/4)
+    //      +INT(275M/9) + D + 1721028.5 + UT/24.
+    // (https://scienceworld.wolfram.com/astronomy/JulianDate.html)
+
+    // if ( h < 12 ) d -= 1;
+    let jd = ( Math.trunc( 1461 * ( y + 4800 + Math.trunc( (m - 14) / 12 ) ) / 4 ) +
+               + Math.trunc( (367 * (m - 2 - 12 * Math.trunc( (m - 14) / 12 ) ) ) / 12 )
+               - Math.trunc( (3 * Math.trunc( (y + 4900 + Math.trunc( (m - 14) / 12) ) / 100 ) ) / 4 )  + d - 32075 )
+    jd += ( (h-12) + ( minute + ( s + ms/1000. ) / 60. ) / 60. ) / 24.;
+    // if (h < 12) jd += 1.;
+    return jd - 2400000.5;
+}
+
+rkWebUtil.ymdOfMjd = function( mjd ) {
+    // Again trusting Wikipeida...
+    // That algorithm gives the Y-M-D for the *afternoon* at the beginning
+    //  of the Julian day; since JD flips over at noon, that makes it
+    //  complicated.  I *think* what Wikipedia means is that when
+    //  JD = <something>.0, we get the date that will be right from
+    //  noon until 23:59.  What I really want, though, is the
+    //  date that will be right for the given mjd, which *does* flip
+    //  over at a sane 00:00.
+    //
+    // Examples:
+    // at jd=2,400,000.0:
+    //   mjd = -0.5
+    //   datetime = 1858-11-16 12:00:00
+    // at jd=2,400,000.5:
+    //   mjd = 0
+    //   datetime = 1858-11-17 00:00:00
+    //
+    // If I understand what wikipedia is saying correctly, this
+    //   algorithm will return 1858-11-16 for both of these dates,
+    //   but what I wanted was 1858-11-17 for the second one.
+    // What this means is that I want to add 0.5 to the jd
+    //   to get the y-m-d that I really want... but then
+    //   the algorithm wants an integer jd, so I think that
+    //   no matter what I do, I'm going to be succeptible
+    //   to floating-point roundoff when I'm right near
+    //   the edge.
+
+    // This is my weak attempt to mitigate the problems with roundoff
+    // In mjdtodatetimebelow, I have something that should be more
+    // reliable.
+    let intmjd = Math.floor( mjd );
+    let jd = Math.floor( intmjd + 2400000.5 + 0.5 );
+    let y = 4716;
+    let j = 1401;
+    let m = 2;
+    let n = 12;
+    let r = 4;
+    let p = 1461;
+    let v = 3;
+    let u = 5;
+    let s = 153;
+    let w = 2;
+    let B = 274277;
+    let C = -38;
+
+    let f = jd + j + Math.floor( ( Math.floor( ( 4 * jd + B ) / 146097 ) * 3 ) / 4 ) + C;
+    let e = r * f + v;
+    let g = Math.floor( ( e % p ) / r );
+    let h = u * g + w;
+    let D = Math.floor( ( h % s ) / u ) + 1;
+    let M = ( ( Math.floor( h / s ) + m ) % n ) + 1;
+    let Y = ( Math.floor( e / p) ) - y + Math.floor( (n + m - M) / n );
+    return [ Math.floor(Y), Math.floor(M), Math.floor(D) ];
+}
+
+rkWebUtil.dateOfMjd = function( mjd ) {
+    let YMD = rkWebUtil.ymdOfMjd( mjd );
+    let Y = YMD[0];
+    let M = YMD[1];
+    let D = YMD[2];
+    // Try to handle floating point roundoff
+    // Javascript's insistance that Dates are local time, with no way of
+    // specifying time zone, is VERY ANNOYING.
+    // let intmjd = rkWebUtil.mjdOfDate( new Date( Y, M-1, D, 0, 0, 0, 0 ) );
+    let javascript_is_stupid = new Date();
+    javascript_is_stupid.setUTCFullYear( Y );
+    javascript_is_stupid.setUTCMonth( M-1 );
+    javascript_is_stupid.setUTCDate( D );
+    javascript_is_stupid.setUTCHours( 0 );
+    javascript_is_stupid.setUTCMinutes( 0 );
+    javascript_is_stupid.setUTCSeconds( 0 );
+    javascript_is_stupid.setUTCMilliseconds( 0 );
+    let intmjd = rkWebUtil.mjdOfDate( javascript_is_stupid );
+    //This next thing will only happen with a floating-point
+    //roundoff from 0.999999999.  In this case, just round up
+    // to the next integer mjd
+    if ( ( mjd - intmjd ) < 0 ) {
+        intmjd -= 1;
+    }
+    let secs = ( mjd - intmjd ) * 24 * 3600;
+    let h = Math.floor( secs / 3600 );
+    let m = Math.floor( ( secs - 3600*h ) / 60 );
+    let s = Math.floor( secs - 3600*h - 60*m );
+    let mus = Math.floor( 1e6 * ( secs - 3600*h - 60*m - s ) + 0.5 )
+    // Another floating point roundoff issue
+    let soff = 0
+    if ( mus >= 1000000 ) {
+        mus -= 1000000;
+        soff = 1;
+    }
+    let mssinceepoch = Date.UTC( Y, M-1, D, h, m, s, mus/1000. );
+    if ( soff != 0 ) {
+        mssinceepoch += 1000 * soff;
+    }
+    return new Date( mssinceepoch );
+}
+
+
+
+
 // **********************************************************************
 
 rkWebUtil.hideOrShow = function( widget, parameter, hideparams, showparams, displaytype="block" ) {
@@ -279,8 +409,8 @@ rkWebUtil.b64encode = function( bytes )
     }
 
     return encstr;
-}        
-    
+}
+
 
 rkWebUtil.b64decode = function( text )
 {
@@ -288,7 +418,7 @@ rkWebUtil.b64decode = function( text )
         console.log( "ERROR : got b64 string of length " + text.length + ", which isn't a factor of 4" );
         return null;
     }
-    
+
     // Making no assumptions about character encoding here
     // I could probably make this more efficient if I did
     if ( rkWebUtil._invb64letters == null ) {
@@ -334,7 +464,7 @@ rkWebUtil.b64decode = function( text )
     return bytes;
 }
 
-        
+
 // For backwards compatibility with earlier versions of rkWebUtil:
 // It's possible that this can replace b64encode above....
 rkWebUtil.arrayBufferToB64 = function( buffer )

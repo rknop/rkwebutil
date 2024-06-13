@@ -15,7 +15,7 @@ var exampleap = function() {}
 
 exampleap.prototype.init = function() {
     var self = this;
-    
+
     this.statusdiv = document.getElementById( "status-div" );
     this.maindiv = document.getElementById( "main-div" );
     if ( this.statusdiv == null ) {
@@ -31,7 +31,10 @@ exampleap.prototype.init = function() {
 // **********************************************************************
 
 
-exampleap.prototype.render = function() {
+exampleap.prototype.render = function()
+{
+    let self = this;
+
     this.show_or_prompt_login();
     rkWebUtil.wipeDiv( this.maindiv );
     if ( ! this.auth.authenticated ) {
@@ -39,6 +42,16 @@ exampleap.prototype.render = function() {
     }
     else {
         rkWebUtil.elemaker( "p", this.maindiv, { "text": "Hello world." } );
+    }
+
+    this.mjdwid = document.getElementById( "mjd" );
+    this.datewid = document.getElementById( "date" );
+    if ( ( this.mjdwid != null ) && ( this.datewid != null ) &&
+         ( this.mjdwid != undefined ) && ( this.datewid != undefined ) ) {
+        let mjdbut = document.getElementById( "convmjd" );
+        mjdbut.addEventListener( "click", () => { self.mjdtodate(); } );
+        let datebut = document.getElementById( "convdate" );
+        datebut.addEventListener( "click", () => { self.datetomjd(); } );
     }
 }
 
@@ -64,7 +77,23 @@ exampleap.prototype.show_or_prompt_login = function() {
         this.auth.showLoginUI();
     }
 }
-    
+
+// **********************************************************************
+
+exampleap.prototype.mjdtodate = function()
+{
+    let mjd = parseFloat( this.mjdwid.value );
+    let date = rkWebUtil.dateOfMjd( mjd );
+    this.datewid.value = date.toISOString( date );
+}
+
+exampleap.prototype.datetomjd = function()
+{
+    let date = Date.parse( this.datewid.value );
+    let mjd = rkWebUtil.mjdOfDate( date );
+    this.mjdwid.value = mjd.toString();
+}
+
 // **********************************************************************
 
 export { exampleap, webapurl }

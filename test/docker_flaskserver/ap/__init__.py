@@ -22,7 +22,7 @@ def create_app():
     server_session = flask_session.Session( app )
 
     db.setdbparams( 'postgres', 'fragile', 'postgres', 5432, 'test_rkwebutil' )
-    
+
     from . import flaskauth
     flaskauth.RKAuthConfig.email_from = 'rkwebutil test <nobody@nowhere.org>'
     flaskauth.RKAuthConfig.email_subject = 'rkwebutil test password reset'
@@ -47,5 +47,9 @@ def create_app():
         authenticated = ( 'authenticated' in flask.session ) and flask.session['authenticated']
         return flask.render_template( 'ap.html', username=username, userdisplayname=userdisplayname,
                                       authenticated=authenticated )
+
+    @app.route('/tconv')
+    def tconv():
+        return flask.render_template( 'tconv.html' )
 
     return app
