@@ -1,4 +1,4 @@
-raise RuntimeError( "Out of date, needs to be updated.  (Currently on the flask version is supported.)" )
+raise RuntimeError( "Out of date, needs to be updated.  (Currently only the flask versions are supported.)" )
 
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-

@@ -9,6 +9,7 @@ import time
 import json
 import requests
 import pytest
+import logging
 
 import selenium
 from selenium.common.exceptions import NoSuchElementException
@@ -25,6 +26,7 @@ class AuthTestBase:
     def browser( self ):
         opts = selenium.webdriver.FirefoxOptions()
         opts.add_argument( "--headless" )
+
         ff = selenium.webdriver.Firefox( options=opts )
         # Need this next one since the test env. uses a self-signed cert
         ff.accept_untrusted_certs = True
@@ -279,3 +281,6 @@ class AuthTestBase:
 
 class TestFlaskAuth(AuthTestBase):
     url = "https://flaskserver:8081/"
+
+class TestFlaskSQLAuth(AuthTestBase):
+    url = "https://flaskserver_sql:8082/"

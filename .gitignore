@@ -1,4 +1,6 @@
 **~
 __pycache__
 
-test/html_install
+test/test_install
+test/.env
+

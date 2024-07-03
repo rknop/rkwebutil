@@ -67,7 +67,7 @@
 # TODO ROB WRITE THE REST
 ## OLD
 ## In your webap, you can find out if the user has been authenticated by
-## accessing the session; 
+## accessing the session;
 ##    authenticated : True or False
 ##    useruuid
 ##    username
@@ -95,7 +95,7 @@
 #
 # The database has two tables, which must have at least the following columns;
 # they may have additional columns.  The table names can be configured at the
-# call to RAKAuthConfig.setdbparams().
+# call to RKAuthConfig.setdbparams().
 #
 #   authuser:
 #      id : UUID
@@ -127,6 +127,8 @@ from email.policy import EmailPolicy
 
 import psycopg2
 import psycopg2.extras
+import psycopg2.extensions
+psycopg2.extensions.register_adapter( dict, psycopg2.extras.Json )
 
 import flask
 import Crypto.PublicKey.RSA
@@ -154,7 +156,7 @@ class RKAuthConfig:
 
     authuser_table = "authuser"
     passwordlink_table = "passwordlink"
-    
+
     email_from = 'RKAuth <nobody@nowhere.org>'
     email_subject = 'RKAuth password reset'
     email_system_name = 'a webserver using the RKAuth system'
@@ -192,8 +194,11 @@ class RKAuthConfig:
         smtp_username : str or None
         smtp_password : str or None
 
-        webap_url : 
-        
+        webap_url : where the *auth* ap is found.  It may be possible to
+                    leave this at None, in which case it will assume
+                    it's flask.request.base_url, which is probably
+                    right.
+
         """
         for key,val in kwargs.items():
             if not hasattr( cls, key ):
@@ -205,11 +210,11 @@ class RKAuthConfig:
         if not re.search( '^[a-zA-Z0-9_]+$', cls.authuser_table ):
             raise ValueError( f"Invalid authuser table name {cls.authuser_table}" )
         if not re.search( '^[a-zA-Z0-9_]+$', cls.passwordlink_table ):
-            raise ValueError( f"Invalid passwordlink table name {class.passwordlink_table}" )
+            raise ValueError( f"Invalid passwordlink table name {cls.passwordlink_table}" )
 
 @contextlib.contextmanager
 def _con_and_cursor():
-    dbcon = psycopg2.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RAKAuthConfig.db_name,
+    dbcon = psycopg2.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
                               user=RKAuthConfig.db_user, password=RKAuthConfig.db_password,
                               cursor_factory=psycopg2.extras.NamedTupleCursor )
     cursor = dbcon.cursor()
@@ -219,16 +224,16 @@ def _con_and_cursor():
     cursor.close()
     dbcon.rollback()
     dbcon.close()
-    
-        
+
+
 def _get_user( userid=None, username=None, email=None, many_ok=False ):
     if ( ( userid is not None ) + ( username is not None ) + ( email is not None ) ) != 1:
         raise RuntimeError( "Specify exactly one of {userid,username,email}" )
-        
+
     q = f"SELECT * FROM {RKAuthConfig.authuser_table} "
     subdict = {}
     if userid is not None:
-        q += "WHERE uuid=%(uuid)s"
+        q += "WHERE id=%(uuid)s"
         subdict['uuid'] = userid
     elif username is not None:
         q += "WHERE username=%(username)s"
@@ -258,25 +263,26 @@ def get_user_by_username( username ):
 
 def get_users_by_email( email ):
     return _get_user( email=email, many_ok=True )
-        
+
 
 def create_password_link( useruuid ):
-    PasswordLink = namedtuple( 'passwordlink', [ 'uuid', 'userid', 'expires' ] )
-    pwlink = PasswordLink( uuid.uuid4(), useruuid, datetime.datetime.now( datetime.timezone.utc ) )
+    PasswordLink = namedtuple( 'passwordlink', [ 'id', 'userid', 'expires' ] )
+    expires = datetime.datetime.now( datetime.timezone.utc ) + datetime.timedelta( hours=1 )
+    pwlink = PasswordLink( uuid.uuid4(), useruuid, expires )
 
-    with _con_and_cursor as con_and_cursor:
+    with _con_and_cursor() as con_and_cursor:
         con, cursor = con_and_cursor
-        cursor.execute( f"INSERT INTO {RKAuthConfig.passwordlink_table}(uuid,userid,expires) "
+        cursor.execute( f"INSERT INTO {RKAuthConfig.passwordlink_table}(id,userid,expires) "
                         f"VALUES (%(uuid)s,%(userid)s,%(expires)s)",
-                        { 'uuid': pwlink.uuid, 'userid': pwlink.userid, 'expires': expires } )
+                        { 'uuid': str(pwlink.id), 'userid': str(pwlink.userid), 'expires': pwlink.expires } )
         con.commit()
 
     return pwlink
 
 def get_password_link( linkid ):
-    with _con_and_cursor as con_and_cursor:
+    with _con_and_cursor() as con_and_cursor:
         cursor = con_and_cursor[1]
-        cursor.execte( f"SELECT * FROM pwlink WHERE id=%(uuid)s", { "uuid": linkid } )
+        cursor.execute( f"SELECT * FROM {RKAuthConfig.passwordlink_table} WHERE id=%(uuid)s", { "uuid": linkid } )
         rows = cursor.fetchall()
         if len( rows ) == 0:
             return None
@@ -433,19 +439,19 @@ def getpasswordresetlink():
 
         if 'username' in flask.request.json:
             username = flask.request.json['username']
-            user = get_user_by_username( username )
-            if user is None:
+            them = get_user_by_username( username )
+            if them is None:
                 return f"username {username} not known", 500
         elif 'email' in flask.request.json:
             email = flask.request.json['email']
-            user = get_users_by_email( email )
-            if user is None:
+            them = get_users_by_email( email )
+            if them is None:
                 return f"email {email} not known", 500
         else:
             return "Must include either 'username' or 'email' in POST data", 500
 
-        if not isinstance( user, list ):
-            user = [ user ]
+        if not isinstance( them, list ):
+            them = [ them ]
 
         sentto = ""
         for user in them:
@@ -453,7 +459,7 @@ def getpasswordresetlink():
             pwlink = create_password_link( user.id )
 
             if RKAuthConfig.webap_url is None:
-                webap_url = flask.request.base_url
+                webap_url = flask.request.base_url.replace( '/getpasswordresetlink', '' )
             else:
                 webap_url = RKAuthConfig.webap_url
 
@@ -479,7 +485,7 @@ def getpasswordresetlink():
                             f"If you did not request this, you may ignore this message.\n"
                             f"Here is the link; cut and paste it into your browser:\n"
                             f"\n"
-                            f"{webap_url}/resetpassword?uuid={str(link.id)}" )
+                            f"{webap_url}/resetpassword?uuid={str(pwlink.id)}" )
             smtp.send_message( msg, RKAuthConfig.email_from, to_addrs=user.email )
             smtp.quit()
             if len(sentto) > 0:
@@ -611,8 +617,8 @@ def changepassword():
                               'privkey': { 'privkey': flask.request.json['privatekey'],
                                            'salt': flask.request.json['salt'],
                                            'iv': flask.request.json['iv'] } } )
-            cursor.execute( f"DELETE FROM {RKAuthConfig.passwordlink_table) WHERE id=%(uuid)s",
-                            { 'uuid': json['passwordlinkid'] } )
+            cursor.execute( f"DELETE FROM {RKAuthConfig.passwordlink_table} WHERE id=%(uuid)s",
+                            { 'uuid': flask.request.json['passwordlinkid'] } )
             con.commit()
             return { "status": "Password changed" }
     except Exception as e:

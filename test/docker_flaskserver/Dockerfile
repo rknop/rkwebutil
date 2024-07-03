@@ -32,6 +32,9 @@ RUN pip --no-cache install \
   sqlalchemy
 
 RUN mkdir /sessions
+# This next one is horrible security... but this is a test environment, so whatevs
+# Need it if I'm going to run as whatever user.
+RUN chmod a+rwx /sessions
 
 COPY createdb.py /usr/src
 COPY key.pem /usr/src

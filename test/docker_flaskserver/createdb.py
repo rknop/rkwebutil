@@ -1,3 +1,4 @@
+import sys
 import os
 import psycopg2
 
@@ -7,6 +8,7 @@ def main():
     dbuser = os.getenv( 'DB_USER' )
     dbpass = os.getenv( 'DB_PASS' )
     dbport = os.getenv( 'DB_PORT' )
+    sys.stderr.write( f"host={dbhost}, user={dbuser}, password={dbpass}, port={dbport}, dbname={dbname}\n" )
     conn = psycopg2.connect( host=dbhost, user=dbuser, password=dbpass, port=dbport, dbname=dbname )
     cursor = conn.cursor()
 
