@@ -1,5 +1,5 @@
-FROM rknop/devuan-daedalus-rknop
-MAINTAINER Rob Knop <rknop@pobox.com>
+FROM rknop/devuan-daedalus-rknop AS webserver
+LABEL maintainer="Rob Knop <rknop@pobox.com>"
 
 SHELL ["/bin/bash", "-c"]
 
@@ -36,9 +36,9 @@ RUN mkdir /sessions
 # Need it if I'm going to run as whatever user.
 RUN chmod a+rwx /sessions
 
-COPY createdb.py /usr/src
-COPY key.pem /usr/src
-COPY cert.pem /usr/src
+COPY docker_flask_sa/createdb.py /usr/src
+COPY docker_flask_sa/key.pem /usr/src
+COPY docker_flask_sa/cert.pem /usr/src
 
 ENTRYPOINT [ "gunicorn", "--certfile", "/usr/src/cert.pem", "--keyfile", "/usr/src/key.pem", \
            "-w", "1", "--threads", "10", "-b", "0.0.0.0:8081", "--timeout", "0", "server:app" ]

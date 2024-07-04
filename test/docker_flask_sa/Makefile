@@ -1,4 +1,4 @@
-INSTALLDIR = ../test_install/flask
+INSTALLDIR = ../test_install/flask_sa
 
 INSTALL_HERE = server.py ap/__init__.py  ap/db.py ap/static/ap.css ap/static/ap.js ap/static/ap_start.js \
 	ap/static/tconv.js ap/static/tconv_start.js \
