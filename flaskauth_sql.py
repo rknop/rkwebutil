@@ -8,14 +8,12 @@
 # rkwebutil is free software, available under the BSD 3-clause license (see LICENSE)
 
 #### HOW TO USE
-# This is for a webap built with flask and a database built with SQLAlchemy.
+# This is for a webap built with flask and a PostgreSQL database
 #
-# An example may be found in test/docker_flaskserver
+# An example may be found in test/docker_flaskserver_sql
 #
-# 1. Create the db module (see "DATABASE ASSUMPTIONS" below).  It must
-#    be able to fully initialze the database.  (This could include a
-#    call to a function inside it from your main webap code, for
-#    instance.)  An example is in test/docker_flaskserver/ap/db.py
+# 1. Make sure the expected database tables exist (see "DATABASE
+#    ASSUMPTIONS" below).
 #
 # 2. Import this file into your main webap code.
 #
@@ -36,30 +34,34 @@
 #          SESSION_PERMANENT=True,
 #          SESSION_USE_SIGNER=True,
 #          SESSION_FILE_DIR='/sessions',
-#         SESSION_FILE_THRESHOLD=1000,
+#          SESSION_FILE_THRESHOLD=1000,
 #      )
 #
 #    replace '/sessions' with the directory where the web server can store session files.
 #
-# 4. Configure email for password link sending.  After you've imported this file,
-#    do the following:
-#      rkauth.RKAuthConfig.email_from = 'your webap <nobody@nowhere.org>'
-#      rkauth.RKAuthConfig.email_subject = 'reset password email subject'
-#      rkauth.RKAuthConfig.email_system_name = 'your webapp system name'
-#      rkauth.RKAuthConfig.smtp_server = 'your smtp server'
-#      rkauth.RKAuthConfig.smtp_port = 465
-#      rkauth.RKAuthConfig.smtp_use_ssl = True
-#      rkauth.RKAuthConfig.smtp_username = 'your smtp username'
-#      rkauth.RKAuthConfig.smtp_password = 'your smtp passwrd'
-#      rkauth.RKAuthConfig.webap_url = '<url>/auth'
+# 4. Configure the databse, and configure email for password link sending.  A
+#    After you've imported this file, call the setdbparams() class method of the
+#    RKAuthConfig class:
+#      flaskauth_sql.RKAuthConfig.setdbparams(
+#          db_host='postgres',
+#          db_port=5432,
+#          db_name='test_rkwebutil',
+#          db_user='postgres',
+#          db_password='fragile',
+#          email_from = 'rkwebutil test <nobody@nowhere.org>',
+#          email_subject = 'rkwebutil test password reset',
+#          email_system_name = 'the rkwebutil test webserver',
+#          smtp_server = 'mailhog',
+#          smtp_port = 1025,
+#          smtp_use_ssl = False,
+#          smtp_username = None,
+#          smtp_password = None,
+#      )
 #
-#    Make all of the variables the right things so that you can send
-#    email, and so that the email headers and body look like what you'd
-#    want.  In particular, <url> must be the base url of your web
-#    application.
-#
+#    The values in this example are from the tests-- substitute in the right values for your setup.
+#x
 # 5. Add the following code:
-#      app.register_blueprint( rkauth.bp )
+#      app.register_blueprint( flaskauth_sql.bp )
 #
 #    That will hook up a subapplication /auth under your main webap that
 #    handles all of the authentication stuff.
