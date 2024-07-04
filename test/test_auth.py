@@ -21,7 +21,7 @@ from selenium.webdriver.remote.webelement import WebElement
 
 class AuthTestBase:
     url = None
-    
+
     @pytest.fixture(scope='class')
     def browser( self ):
         opts = selenium.webdriver.FirefoxOptions()
@@ -276,11 +276,12 @@ class AuthTestBase:
         assert h2.text == "Not Logged In"
 
 
-# class TestWebpyAuth(AuthTestBase):
-#     url = "http://webserver:8080/ap.py/"
-
 class TestFlaskAuth(AuthTestBase):
-    url = "https://flaskserver:8081/"
+    url = "https://flask:8080/"
 
-class TestFlaskSQLAuth(AuthTestBase):
-    url = "https://flaskserver_sql:8082/"
+class TestFlaskSAAuth(AuthTestBase):
+    url = "https://flask_sa:8081/"
+
+# class TestWebpySAAuth(AuthTestBase):
+#     url = "http://webpy_sa:8083/ap.py/"
+

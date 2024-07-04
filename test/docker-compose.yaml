@@ -24,9 +24,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    image: rknop/rkwebutil_test_flaskserver
+    image: rknop/rkwebutil_test_flask
     build:
-      context: docker_flaskserver
+      context: .
+      dockerfile: ./docker_flask/Dockerfile
+      target: webserver
     environment:
       DB_NAME: test_rkwebutil
       DB_HOST: postgres
@@ -39,10 +41,128 @@ services:
       - python3 /usr/src/createdb.py
     user: ${USERID:-0}:${GROUPID:-0}
 
-  # makeinstall_webpy:
-  #   image: rknop/rkwebutil_test_webserver
+  makeinstall_flask:
+    image: rknop/rkwebutil_test_flask
+    build:
+      context: .
+      dockerfile: ./docker_flask/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    volumes:
+      - type: bind
+        source: ../
+        target: /rkwebutil_src
+      - type: bind
+        source: test_install/flask
+        target: /var/www/html
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        make -C /rkwebutil_src/test/docker_flask install <<<---- CHECK THIS
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  flask:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      makeinstall_flask:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8080 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: rknop/webutil_test_flask
+    build:
+      context: .
+      dockerfile: ./docker_flask/Dockerfile
+      target: webserver
+    volumes:
+      - type: bind
+        source: test_install/flask_sql
+        target: /flask
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8080:8080"
+    user: ${USERID:-0}:${GROUPID:-0}
+
+#  makeinstall_flask_sa:
+#    image: rknop/rkwebutil_test_flask_sa
+#    build:
+#      context: .
+#      dockerfile: ./docker_flask_sa/Dockerfile
+#      target: webserver
+#    environment:
+#      DB_NAME: test_rkwebutil
+#      DB_HOST: postgres
+#      DB_USER: postgres
+#      DB_PASS: fragile
+#      DB_PORT: 5432
+#    volumes:
+#      - type: bind
+#        source: ../
+#        target: /rkwebutil_src
+#      - type: bind
+#        source: test_install/flask_sa
+#        target: /var/www/html
+#    entrypoint:
+#      - /bin/bash
+#      - -c
+#      - |
+#        make -C /rkwebutil_src/test/docker_flask_sa install
+#    user: ${USERID:-0}:${GROUPID:-0}
+#
+#  flask_sa:
+#    depends_on:
+#      createdb:
+#        condition: service_completed_successfully
+#      makeinstall_flask:
+#        condition: service_completed_successfully
+#      mailhog:
+#        condition: service_started
+#    healthcheck:
+#      test: netcat -w 1 localhost 8081 || exit 1
+#      interval: 5s
+#      timeout: 10s
+#      retries: 5
+#    image: rknop/webutil_test_flask_sa
+#    build:
+#      context: .
+#      dockerfile: ./docker_flask_sa/Dockerfile
+#      target: webserver
+#    volumes:
+#      - type: bind
+#        source: test_install/flask
+#        target: /flask
+#    environment:
+#      DB_NAME: test_rkwebutil
+#      DB_HOST: postgres
+#      DB_USER: postgres
+#      DB_PASS: fragile
+#      DB_PORT: 5432
+#    ports:
+#      - "8081:8081"
+#    user: ${USERID:-0}:${GROUPID:-0}
+
+  # makeinstall_webpy_sa:
+  #   image: rknop/rkwebutil_test_webpy_sa
   #   build:
-  #     context: docker_webserver
+  #     context: .
+  #     dockerfile: ./docker_webpy_sa/Dockerfile
+  #     target: webserver
   #   environment:
   #     DB_NAME: test_rkwebutil
   #     DB_HOST: postgres
@@ -54,16 +174,16 @@ services:
   #       source: ../
   #       target: /rkwebutil_src
   #     - type: bind
-  #       source: test_install/html
+  #       source: test_install/webpy_sa
   #       target: /var/www/html
   #   entrypoint:
   #     - /bin/bash
   #     - -c
   #     - |
-  #       make -C /rkwebutil_src/test/docker_webserver install
+  #       make -C /rkwebutil_src/test/docker_webpy_sa install
   #   user: ${USERID:-0}:${GROUPID:-0}
 
-  # webserver:
+  # webpy_sa:
   #   depends_on:
   #     createdb:
   #       condition: service_completed_successfully
@@ -71,12 +191,14 @@ services:
   #       condition: service_completed_successfully
   #     mailhog:
   #       condition: service_started
-  #   image: rknop/rkwebutil_test_webserver
+  #   image: rknop/rkwebutil_test_webpy_sa
   #   build:
-  #     context: docker_webserver
+  #     context: .
+  #     dockerfile: ./docker_webpy_sa/Dockerfile
+  #     target: webserver
   #   volumes:
   #     - type: bind
-  #       source: test_install/html
+  #       source: test_install/webpy_sa
   #       target: /var/www/html
   #   environment:
   #     DB_NAME: test_rkwebutil
@@ -85,132 +207,26 @@ services:
   #     DB_PASS: fragile
   #     DB_PORT: 5432
   #   ports:
-  #     - "8080:8080"
+  #     - "8083:8083"
   #   user: ${USERID:-0}:${GROUPID:-0}
-
-  makeinstall_flask:
-    image: rknop/rkwebutil_test_flaskserver
-    build:
-      context: docker_flaskserver
-    environment:
-      DB_NAME: test_rkwebutil
-      DB_HOST: postgres
-      DB_USER: postgres
-      DB_PASS: fragile
-      DB_PORT: 5432
-    volumes:
-      - type: bind
-        source: ../
-        target: /rkwebutil_src
-      - type: bind
-        source: test_install/flask
-        target: /var/www/html
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        make -C /rkwebutil_src/test/docker_flaskserver install
-    user: ${USERID:-0}:${GROUPID:-0}
-
-  flaskserver:
-    depends_on:
-      createdb:
-        condition: service_completed_successfully
-      makeinstall_flask:
-        condition: service_completed_successfully
-      mailhog:
-        condition: service_started
-    healthcheck:
-      test: netcat -w 1 localhost 8081 || exit 1
-      interval: 5s
-      timeout: 10s
-      retries: 5
-    image: rknop/webutil_test_flaskserver
-    build:
-      context: docker_flaskserver
-    volumes:
-      - type: bind
-        source: test_install/flask
-        target: /flask
-    environment:
-      DB_NAME: test_rkwebutil
-      DB_HOST: postgres
-      DB_USER: postgres
-      DB_PASS: fragile
-      DB_PORT: 5432
-    ports:
-      - "8081:8081"
-    user: ${USERID:-0}:${GROUPID:-0}
-
-  makeinstall_flask_sql:
-    image: rknop/rkwebutil_test_flaskserver_sql
-    build:
-      context: .
-      dockerfile: ./docker_flaskserver_sql/Dockerfile
-      target: flaskserver_sql
-    environment:
-      DB_NAME: test_rkwebutil
-      DB_HOST: postgres
-      DB_USER: postgres
-      DB_PASS: fragile
-      DB_PORT: 5432
-    volumes:
-      - type: bind
-        source: ../
-        target: /rkwebutil_src
-      - type: bind
-        source: test_install/flask_sql
-        target: /var/www/html
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        make -C /rkwebutil_src/test/docker_flaskserver_sql install
-    user: ${USERID:-0}:${GROUPID:-0}
-
-  flaskserver_sql:
-    depends_on:
-      createdb:
-        condition: service_completed_successfully
-      makeinstall_flask_sql:
-        condition: service_completed_successfully
-      mailhog:
-        condition: service_started
-    healthcheck:
-      test: netcat -w 1 localhost 8082 || exit 1
-      interval: 5s
-      timeout: 10s
-      retries: 5
-    image: rknop/webutil_test_flaskserver_sql
-    build:
-      context: .
-      dockerfile: ./docker_flaskserver_sql/Dockerfile
-      target: flaskserver_sql
-    volumes:
-      - type: bind
-        source: test_install/flask_sql
-        target: /flask
-    environment:
-      DB_NAME: test_rkwebutil
-      DB_HOST: postgres
-      DB_USER: postgres
-      DB_PASS: fragile
-      DB_PORT: 5432
-    ports:
-      - "8082:8082"
-    user: ${USERID:-0}:${GROUPID:-0}
 
 
   shell:
     depends_on:
       postgres:
+        condition: service_started
+      flask:
         condition: service_healthy
-      # webserver:
-      #   condition: service_started
-      flaskserver:
-        condition: service_healthy
-      flaskserver_sql:
-        condition: service_healthy
+      # flask_sa:
+      #   condition: service_healthy
+      # webpy:
+      #   condition: service_healthy
+      # webpy_sa:
+      #   condition: service_healthy
+      # apache:
+      #   condition: service_healthy
+      # apache_sa:
+      #   condition: service_healthy
     image: rknop/rkwebutil_test
     build:
       context: docker_test
@@ -229,12 +245,18 @@ services:
     depends_on:
       postgres:
         condition: service_started
-      # webserver:
+      flask:
+        condition: service_healthy
+      # flask_sa:
       #   condition: service_healthy
-      flaskserver:
-        condition: service_healthy
-      flaskserver_sql:
-        condition: service_healthy
+      # webpy:
+      #   condition: service_healthy
+      # webpy_sa:
+      #   condition: service_healthy
+      # apache:
+      #   condition: service_healthy
+      # apache_sa:
+      #   condition: service_healthy
     image: rknop/rkwebutil_test
     build:
       context: docker_test

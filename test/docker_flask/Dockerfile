@@ -46,7 +46,7 @@ RUN source /venv/bin/activate && \
        requests
 
 # ======================================================================
-FROM base AS flaskserver_sql
+FROM base AS webserver
 
 COPY --from=build /venv/ /venv/
 ENV PATH=/venv/bin:$PATH
@@ -61,4 +61,4 @@ COPY docker_flaskserver_sql/key.pem /usr/src/key.pem
 COPY docker_flaskserver_sql/cert.pem /usr/src/cert.pem
 
 ENTRYPOINT [ "gunicorn", "--certfile", "/usr/src/cert.pem", "--keyfile", "/usr/src/key.pem", \
-           "-w", "1", "--threads", "10", "-b", "0.0.0.0:8082", "--timeout", "0", "server:app" ]
+           "-w", "1", "--threads", "10", "-b", "0.0.0.0:8080", "--timeout", "0", "server:app" ]

@@ -1,9 +1,9 @@
-INSTALLDIR = ../test_install/flask_sql
+INSTALLDIR = ../test_install/flask
 
 INSTALL_HERE = server.py ap/__init__.py  ap/static/ap.css ap/static/ap.js ap/static/ap_start.js \
 	ap/static/tconv.js ap/static/tconv_start.js \
 	ap/templates/base.html ap/templates/ap.html ap/templates/tconv.html
-INSTALL_PARENT = flaskauth_sql.py
+INSTALL_PARENT = rkauth_flask.py
 INSTALL_PARENT_STATIC = resetpasswd_start.js rkauth.js rkwebutil.js
 
 

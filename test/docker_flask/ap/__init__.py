@@ -3,7 +3,7 @@ import flask
 import flask_session
 import logging
 
-from . import flaskauth_sql
+from . import rkauth_flask
 
 def create_app():
     app = flask.Flask(  __name__ )
@@ -21,7 +21,7 @@ def create_app():
 
     server_session = flask_session.Session( app )
 
-    flaskauth_sql.RKAuthConfig.setdbparams(
+    rkauth_flask.RKAuthConfig.setdbparams(
         db_host='postgres',
         db_port=5432,
         db_name='test_rkwebutil',
@@ -35,10 +35,10 @@ def create_app():
         smtp_use_ssl = False,
         smtp_username = None,
         smtp_password = None,
-        # webap_url = 'https://flaskauth_sql:8082/auth'
+        # webap_url = 'https://flask:8080/auth'
     )
 
-    app.register_blueprint( flaskauth_sql.bp )
+    app.register_blueprint( rkauth_flask.bp )
 
     @app.route('/')
     def hello_world():
