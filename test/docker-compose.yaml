@@ -80,7 +80,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: rknop/webutil_test_flask
+    image: rknop/rkwebutil_test_flask
     build:
       context: .
       dockerfile: ./docker_flask/Dockerfile
@@ -138,7 +138,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: rknop/webutil_test_flask_sa
+    image: rknop/rkwebutil_test_flask_sa
     build:
       context: .
       dockerfile: ./docker_flask_sa/Dockerfile
@@ -210,6 +210,64 @@ services:
   #     - "8083:8083"
   #   user: ${USERID:-0}:${GROUPID:-0}
 
+  makeinstall_apache:
+    image: rknop/rkwebutil_test_apache
+    build:
+      context: .
+      dockerfile: ./docker_apache/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    volumes:
+      - type: bind
+        source: ../
+        target: /rkwebutil_src
+      # - type: bind
+      #   source: test_install/flask
+      #   target: /var/www/html
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        make -C /rkwebutil_src/test/docker_apache install
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  apache:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      makeinstall_apache:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8084 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: rknop/rkwebutil_test_apache
+    build:
+      context: .
+      dockerfile: ./docker_apache/Dockerfile
+      target: webserver
+    volumes:
+      - type: bind
+        source: test_install/apache
+        target: /flask
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8084:8084"
+    user: ${USERID:-0}:${GROUPID:-0}
+
 
   shell:
     depends_on:
@@ -223,8 +281,8 @@ services:
       #   condition: service_healthy
       # webpy_sa:
       #   condition: service_healthy
-      # apache:
-      #   condition: service_healthy
+      apache:
+        condition: service_healthy
       # apache_sa:
       #   condition: service_healthy
     image: rknop/rkwebutil_test
@@ -253,8 +311,8 @@ services:
       #   condition: service_healthy
       # webpy_sa:
       #   condition: service_healthy
-      # apache:
-      #   condition: service_healthy
+      apache:
+        condition: service_healthy
       # apache_sa:
       #   condition: service_healthy
     image: rknop/rkwebutil_test

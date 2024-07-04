@@ -282,6 +282,9 @@ class TestFlaskAuth(AuthTestBase):
 class TestFlaskSAAuth(AuthTestBase):
     url = "https://flask_sa:8081/"
 
+class TestApacheFlaskAuth(AuthTestBase):
+    url = "https://apache:8084/"
+    
 # class TestWebpySAAuth(AuthTestBase):
 #     url = "http://webpy_sa:8083/ap.py/"
 
