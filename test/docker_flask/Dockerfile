@@ -56,9 +56,9 @@ RUN mkdir /sessions
 # Need it if I'm going to run as whatever user.
 RUN chmod a+rwx /sessions
 
-COPY docker_flaskserver_sql/createdb.py /usr/src/createdb.py
-COPY docker_flaskserver_sql/key.pem /usr/src/key.pem
-COPY docker_flaskserver_sql/cert.pem /usr/src/cert.pem
+COPY docker_flask/createdb.py /usr/src/createdb.py
+COPY docker_flask/key.pem /usr/src/key.pem
+COPY docker_flask/cert.pem /usr/src/cert.pem
 
 ENTRYPOINT [ "gunicorn", "--certfile", "/usr/src/cert.pem", "--keyfile", "/usr/src/key.pem", \
            "-w", "1", "--threads", "10", "-b", "0.0.0.0:8080", "--timeout", "0", "server:app" ]

@@ -1,5 +1,5 @@
 FROM rknop/devuan-daedalus-rknop
-MAINTAINER Rob Knop <raknop@pobox.com>
+LABEL maintainer="Rob Knop <raknop@pobox.com>"
 
 SHELL ["/bin/bash", "-c"]
 

@@ -64,7 +64,7 @@ services:
       - /bin/bash
       - -c
       - |
-        make -C /rkwebutil_src/test/docker_flask install <<<---- CHECK THIS
+        make -C /rkwebutil_src/test/docker_flask install
     user: ${USERID:-0}:${GROUPID:-0}
 
   flask:
@@ -87,7 +87,7 @@ services:
       target: webserver
     volumes:
       - type: bind
-        source: test_install/flask_sql
+        source: test_install/flask
         target: /flask
     environment:
       DB_NAME: test_rkwebutil

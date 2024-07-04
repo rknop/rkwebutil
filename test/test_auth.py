@@ -95,7 +95,7 @@ class AuthTestBase:
         assert hdrs['To'] == ['testuser@mailhog']
         assert hdrs['Subject'] == ['rkwebutil test password reset']
         body = msg['Content']['Body']
-        match = re.search( f"^Somebody requested.*({self.url}auth/resetpassword\?uuid=[0-9a-f\-]+)$",
+        match = re.search( rf"^Somebody requested.*({self.url}auth/resetpassword\?uuid=[0-9a-f\-]+)$",
                            body, flags=re.DOTALL )
         assert match is not None
 
@@ -230,7 +230,7 @@ class AuthTestBase:
             assert e.is_displayed()
 
     def test_reset_email( self, browser, password_reset_link, database ):
-        match = re.search( f'^{self.url}auth/resetpassword\?uuid=([0-9a-f\-]+)$', password_reset_link )
+        match = re.search( rf'^{self.url}auth/resetpassword\?uuid=([0-9a-f\-]+)$', password_reset_link )
         assert match is not None
         cursor = database.cursor()
         cursor.execute( "SELECT l.id FROM passwordlink l INNER JOIN authuser a ON l.userid=a.id "
