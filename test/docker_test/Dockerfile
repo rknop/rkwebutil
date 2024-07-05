@@ -16,7 +16,6 @@ RUN apt-get update && apt-get -y upgrade && \
 RUN rm /usr/lib/python3.11/EXTERNALLY-MANAGED
 
 RUN pip3 --no-cache install \
-  sqlalchemy \
   pyyaml \
   python-dateutil \
   pytz \

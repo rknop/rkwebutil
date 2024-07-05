@@ -279,9 +279,6 @@ class AuthTestBase:
 class TestFlaskAuth(AuthTestBase):
     url = "https://flask:8080/"
 
-class TestFlaskSAAuth(AuthTestBase):
-    url = "https://flask_sa:8081/"
-
 class TestApacheFlaskAuth(AuthTestBase):
     url = "https://apache:8084/"
     
