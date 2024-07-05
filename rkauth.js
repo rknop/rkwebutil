@@ -235,8 +235,9 @@ rkAuth.prototype.processChallenge = async function( retdata, password ) {
                                                        { "name": "RSA-OAEP", "hash": "SHA-256" },
                                                        false,
                                                        [ "decrypt" ] );
+        const challenge = rkWebUtil.b64decode( retdata.challenge );
         const plainbytes = new Uint8Array(
-            await crypto.subtle.decrypt( { "name": "RSA-OAEP" }, privkey, rkWebUtil.b64decode( retdata.challenge ) ) );
+            await crypto.subtle.decrypt( { "name": "RSA-OAEP" }, privkey, challenge ) );
         response = decoder.decode( plainbytes );
     }
     catch( err )

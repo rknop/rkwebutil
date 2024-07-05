@@ -8,12 +8,13 @@ SHELL ["/bin/bash", "-c"]
 RUN mkdir -p /flask
 WORKDIR /flask
 
-RUN DEBIAN_FRONTEND="noninteractive" TZ="UTC" \
-    apt-get update \
+ENV DEBIAN_FRONTEND="noninteractive"
+ENV TZ="UTC"
+
+RUN  apt-get update \
     && apt-get -y upgrade \
-    && DEBIAN_FRONTEND="noninteractive" TZ="UTC" \
-    apt-get -y install -y \
-       python3 tmux netcat-openbsd curl elinks postgresql-client make \
+    && apt-get -y install -y \
+         python3 tmux netcat-openbsd curl elinks postgresql-client make \
     && apt-get -y autoremove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

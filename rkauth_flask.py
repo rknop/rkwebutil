@@ -39,10 +39,10 @@
 #
 #    replace '/sessions' with the directory where the web server can store session files.
 #
-# 4. Configure the databse, and configure email for password link sending.  A
+# 4. Configure the databse, and configure email for password link sending.
 #    After you've imported this file, call the setdbparams() class method of the
 #    RKAuthConfig class:
-#      flaskauth_sql.RKAuthConfig.setdbparams(
+#      rkauth_flask.RKAuthConfig.setdbparams(
 #          db_host='postgres',
 #          db_port=5432,
 #          db_name='test_rkwebutil',
@@ -59,36 +59,33 @@
 #      )
 #
 #    The values in this example are from the tests-- substitute in the right values for your setup.
-#x
+#
 # 5. Add the following code:
-#      app.register_blueprint( flaskauth_sql.bp )
+#      app.register_blueprint( rkauth_flask.bp )
 #
 #    That will hook up a subapplication /auth under your main webap that
 #    handles all of the authentication stuff.
 #
-# TODO ROB WRITE THE REST
-## OLD
-## In your webap, you can find out if the user has been authenticated by
-## accessing the session;
-##    authenticated : True or False
-##    useruuid
-##    username
-##    userdisplayname
-##    useremail
-##    ( there's also authuuid, a temporary throwaway value )
-##
+# In your webap, you can find out information about the user by
+# accessing the session;
+#    authenticated : True or False
+#    useruuid
+#    username
+#    userdisplayname
+#    useremail
+#    ( there's also authuuid, a temporary throwaway value )
 
-## CLIENT SIDE:
-##
-## use rkauth.js and resetpasswd_start.js.  It assumes that there are
-## css classes "link" and "center" defined.  When you start up the
-## javascript of your web application, instantiate a rkAuth, and then
-## call checkAuth() on that instance at the end of your initialization;
-## use the callbacks you passed to the constructor to do the rest of
-## your rendering.  See the example in tests/docker_flaskwebserver for an
-## example.
-
-
+# CLIENT SIDE:
+#
+# use rkauth.js and resetpasswd_start.js.  It assumes that there are
+# css classes "link" and "center" defined.  When you start up the
+# javascript of your web application, instantiate a rkAuth, and then
+# call checkAuth() on that instance at the end of your initialization;
+# use the callbacks you passed to the constructor to do the rest of
+# your rendering.
+#
+# See the example in test/docker_flask for an example.
+#
 # ======================================================================
 # DATABASE ASSUMPTIONS
 #
@@ -146,8 +143,7 @@ bp = flask.Blueprint( 'auth', __name__, url_prefix='/auth' )
 class RKAuthConfig:
     """Global rkauth config.
 
-    After importing auth, reset these two variables to what you want to
-    see in the header of the "reset password" emails.
+    After importing, call the setdbparams class method of this class.
 
     """
     db_host = "postgres"
@@ -173,10 +169,6 @@ class RKAuthConfig:
     def setdbparams( cls, **kwargs ):
         """Set the database parameters
 
-        I don't understand why this is necessary, but see
-        docker_flaskserver/ap/__init__.py and search for
-        RKAuthConfig.setdbparams.
-
         Possible arguments:
         db_host : host with postgres database
         db_port : database port
@@ -196,7 +188,7 @@ class RKAuthConfig:
         smtp_username : str or None
         smtp_password : str or None
 
-        webap_url : where the *auth* ap is found.  It may be possible to
+        webap_url : where the *auth* ap is found.  Usually, you want to
                     leave this at None, in which case it will assume
                     it's flask.request.base_url, which is probably
                     right.
@@ -392,10 +384,11 @@ def respondchallenge():
             return "auth/respondchallenge was expecting application/json", 500
         if ( ( not 'username' in flask.request.json ) or
              ( not 'response' in flask.request.json ) ):
-            return ( "Login error: username or challenge response missing"
+            return ( "Login error: username or challenge response missing "
                      "(you probably can't fix this, contact code maintainer)" ), 500
         if flask.request.json['username'] != flask.session['username']:
-            return  ( f"Username {username} didn't match session username {flask.session['username']}; "
+            return  ( f"Username {fask.request.json['username']} "
+                      f"didn't match session username {flask.session['username']}; "
                       f"try logging out and logging back in." ), 500
         if flask.session["authuuid"] != flask.request.json['response']:
             return { 'error': 'Authentication failure.' }
@@ -409,7 +402,8 @@ def respondchallenge():
                 }
     except Exception as e:
         sys.stderr.write( f'{traceback.format_exc()}\n' )
-        return flask.jsonify( { 'error': f'Exception in RespondAuthChallenge: {str(e)}' } )
+        # return flask.jsonify( { 'error': f'Exception in RespondAuthChallenge: {str(e)}' } )
+        return f"Exception in respondchallenge: {str(e)}", 500
 
 
 @bp.route( '/getpasswordresetlink', methods=['POST'] )
@@ -555,8 +549,7 @@ def resetpassword():
         return flask.make_response( response )
     except Exception as e:
         sys.stderr.write( f'{traceback.format_exc()}\n' )
-        response += f'Exception in ResetPassword: {str(e)}'
-        return flask.make_response( response )
+        return f"Exception in resetpassword: {str(e)}", 500
 
 
 @bp.route( '/changepassword', methods=['POST'] )
@@ -598,11 +591,11 @@ def changepassword():
             return "Error, /auth/changepassword was expecting application/json", 500
         for key in [ "passwordlinkid", "publickey", "privatekey", "salt", "iv" ]:
             if not key in flask.request.json:
-                return f"Error, call to changepassword without {key}"
+                return f"Error, call to changepassword without {key}", 500
 
         pwlink = get_password_link( flask.request.json['passwordlinkid'] )
         if pwlink is None:
-            return "Invalid password link {json['passwordlinkid']}", 500
+            return "Invalid password link {flask.request.json['passwordlinkid']}", 500
 
         with _con_and_cursor() as con_and_cursor:
             con, cursor = con_and_cursor

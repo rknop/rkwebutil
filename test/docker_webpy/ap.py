@@ -3,20 +3,9 @@
 
 # This file is part of rkwebutil
 #
-# rkwebutil is Copyright 2023 by Robert Knop
+# rkwebutil is Copyright 2023-2024 by Robert Knop
 #
-# rkwebutil is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# rkwebutil is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-# FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
-# for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with rkwebutil. If not, see <https://www.gnu.org/licenses/>.
+# rkwebutil is free software, available under the BSD 3-clause license (see LICENSE)
 
 import sys
 import pathlib
@@ -26,16 +15,26 @@ _dir = pathlib.Path(__file__).parent
 if str(_dir) not in sys.path:
     sys.path.append( str(_dir) )
 
-import db
+import rkauth_webpy
+
 # In reality, you don't want to hardcode passwords, and you want to read this
 #   from some kind of config.  This is here for the automated tests.
-db.DB.setdbparams( 'postgres', 'fragile', 'postgres', 5432, 'test_rkwebutil' )
-import auth
-# Another thing you want to read from some kind of config.
-auth.RKAuthConfig.email_from = 'rkwebutil test <nobody@nowhere.org>'
-auth.RKAuthConfig.email_subject = 'rkwebutil test password reset'
-auth.RKAuthConfig.email_system_name = 'the rkwebutil test webserver'
-auth.RKAuthConfig.webap_url = 'http://webserver:8080/ap.py/auth'
+rkauth_webpy.RKAuthConfig.setdbparams(
+    db_host = "postgres",
+    db_port = 5432,
+    db_user = "postgres",
+    db_password = "fragile",
+    db_name = "test_rkwebutil",
+        email_from = 'rkwebutil test <nobody@nowhere.org>',
+        email_subject = 'rkwebutil test password reset',
+        email_system_name = 'the rkwebutil test webserver',
+        smtp_server = 'mailhog',
+        smtp_port = 1025,
+        smtp_use_ssl = False,
+        smtp_username = None,
+        smtp_password = None,
+        # webap_url = 'https://flask:8080/auth'
+    )
 
 # ======================================================================
 
@@ -68,8 +67,6 @@ class HandlerBase(object):
         self.response += "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
         self.response += "<title>RKWebutil Test</title>"
         self.response += f"<link rel=\"stylesheet\" href=\"{webapdirurl}ap.css\">\n"
-        self.response += f"<script src=\"{webapdirurl}aes.js\"></script>\n"
-        self.response += f"<script src=\"{webapdirurl}jsencrypt.min.js\"></script>\n"
         self.response += f"<script src=\"{webapdirurl}ap.js\" type=\"module\"></script>\n"
         self.response += f"<script src=\"{webapdirurl}ap_start.js\" type=\"module\"></script>\n"
         self.response += "</head>\n"
@@ -101,17 +98,14 @@ class FrontPage(HandlerBase):
 
 urls = (
     '/',     "FrontPage",
-    '/auth', auth.app
+    '/auth', rkauth_webpy.app
 )
-
-web.config.smtp_server = 'mailhog'
-web.config.smtp_port = 1025
 
 app = web.application( urls, locals() )
 web.config.session_parameters[ "samesite" ] = "lax"
 
 initializer = {}
-initializer.update( auth.initializer )
+initializer.update( rkauth_webpy.initializer )
 # Use something better than /tmp for sessions
 session = web.session.Session( app, web.session.DiskStore( "/tmp" ), initializer=initializer )
 

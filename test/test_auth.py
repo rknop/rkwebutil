@@ -120,8 +120,8 @@ class AuthTestBase:
         conf.clear()
         conf.send_keys( 'gratuitous' )
         # I don't know why, but the alert timeout expired if I didn't sleep before clicking
-        time.sleep(1)
         button.click()
+        time.sleep( 1 )
         alert = WebDriverWait( browser, timeout=10 ).until( expected_conditions.alert_is_present() )
         assert alert.text == 'Password changed'
         alert.dismiss()
@@ -150,7 +150,7 @@ class AuthTestBase:
         assert el.text == 'Request Password Reset'
 
     @pytest.fixture(scope='class')
-    def login( self, browser ):
+    def login( self, browser, get_frontpage_after_reset_password ):
         browser.get( self.url )
         el = WebDriverWait( browser, timeout=10 ).until( lambda d: d.find_element(By.CLASS_NAME, 'link') )
         assert el.text == 'Request Password Reset'
@@ -285,6 +285,5 @@ class TestFlaskSAAuth(AuthTestBase):
 class TestApacheFlaskAuth(AuthTestBase):
     url = "https://apache:8084/"
     
-# class TestWebpySAAuth(AuthTestBase):
-#     url = "http://webpy_sa:8083/ap.py/"
-
+class TestWebpyAuth(AuthTestBase):
+    url = "https://webpy:8082/ap.py/"

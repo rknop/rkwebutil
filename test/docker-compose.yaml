@@ -99,6 +99,61 @@ services:
       - "8080:8080"
     user: ${USERID:-0}:${GROUPID:-0}
 
+  makeinstall_webpy:
+    image: rknop/rkwebutil_test_webpy
+    build:
+      context: .
+      dockerfile: ./docker_webpy/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    volumes:
+      - type: bind
+        source: ../
+        target: /rkwebutil_src
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        make -C /rkwebutil_src/test/docker_webpy install
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  webpy:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      makeinstall_webpy:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8082 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: rknop/rkwebutil_test_webpy
+    build:
+      context: .
+      dockerfile: ./docker_webpy/Dockerfile
+      target: webserver
+    volumes:
+      - type: bind
+        source: test_install/webpy
+        target: /var/www/html
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8082:8082"
+    user: ${USERID:-0}:${GROUPID:-0}
+
   makeinstall_flask_sa:
     image: rknop/rkwebutil_test_flask_sa
     build:
@@ -277,8 +332,8 @@ services:
         condition: service_healthy
       flask_sa:
         condition: service_healthy
-      # webpy:
-      #   condition: service_healthy
+      webpy:
+        condition: service_healthy
       # webpy_sa:
       #   condition: service_healthy
       apache:
@@ -307,8 +362,8 @@ services:
         condition: service_healthy
       flask_sa:
         condition: service_healthy
-      # webpy:
-      #   condition: service_healthy
+      webpy:
+        condition: service_healthy
       # webpy_sa:
       #   condition: service_healthy
       apache:
