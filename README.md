@@ -4,7 +4,7 @@ Several utilities useful for web applications (and maybe some other things):
 
 * rkwebutil.js : a set of random javascript routines I use myself
 * config.py : a python config system that reads yaml files which can override each other
-* rkauth : an authentication system for webaps using flask, flask-session, SQLAlchemy, and Postgres
+* rkauth : an authentication system for webaps using flask, flask-session, and Postgres
 
 rkwebutil is (c) 2023-2024 by Robert Knop, and is available under the BSD 3-clause license (see LICENSE)
 
@@ -39,7 +39,7 @@ Several random javascript utilties that I use all the time myself.
 
 ## rkauth
 
-A system for defining users and authenticating them to a web server.  Assumes use of SQLAlchmey, Postgres, flask, and flask-session
+A system for defining users and authenticating them to a web server.  Assumes use of Postgres, flask, and flask-session
 
 Includes files:
 
