@@ -221,6 +221,7 @@ rkAuth.prototype.processChallenge = async function( retdata, password ) {
         const iv = rkWebUtil.b64decode( retdata.iv );
         const aeskey = await this.getAESKey( password, salt, iv );
         // ****
+        // Uncomment the code here (and showing privkeybytes) for debugging python/javascript communication.
         // Need to make the exportable true in getAESKey() for this to work
         // const encaeskey = await crypto.subtle.exportKey( "jwk", aeskey );  // "jwk"
         // console.log( "Decrypted aeskey = " + JSON.stringify( encaeskey, null, 4 ) );
