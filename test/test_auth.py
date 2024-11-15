@@ -32,7 +32,22 @@ class AuthTestBase:
     url = None
 
     @pytest.fixture(scope='class')
-    def browser( self ):
+    def user_created( self, database ):
+        try:
+            cursor = database.cursor()
+            cursor.execute( "INSERT INTO authuser(id,username,displayname,email) "
+                            "VALUES ('fdc718c3-2880-4dc5-b4af-59c19757b62d','browser_test',"
+                            "'Test User','testuser@mailhog')" )
+            database.commit()
+            yield True
+        finally:
+            cursor = database.cursor()
+            cursor.execute( "DELETE FROM authuser WHERE id='fdc718c3-2880-4dc5-b4af-59c19757b62d'" )
+            database.commit()
+
+
+    @pytest.fixture(scope='class')
+    def browser( self, user_created ):
         opts = selenium.webdriver.FirefoxOptions()
         opts.add_argument( "--headless" )
 
@@ -341,16 +356,16 @@ nRVct/brmHSH0KXam2bLZFECAwEAAQ==
         client.verify_logged_in()
         return client
 
-    def test_send_get_json( self, client ):
-        data = client.send_get_json( '/auth/isauth' )
+    def test_send( self, client ):
+        data = client.send( '/auth/isauth' )
         assert isinstance( data, dict )
         assert data['status']
         assert data['userdisplayname'] == 'test user'
         assert data['useremail'] == 'test@mailhog'
         assert data['username'] == 'test'
 
-    def test_send( self, client ):
-        res = client.send( '/auth/isauth' )
+    def test_post( self, client ):
+        res = client.post( '/auth/isauth' )
         assert isinstance( res, requests.Response )
         assert res.status_code == 200
         assert res.headers.get('Content-Type')[:16] == 'application/json'

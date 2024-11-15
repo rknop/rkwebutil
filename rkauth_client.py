@@ -107,10 +107,13 @@ class rkAuthClient:
                 raise RuntimeError( f"Unexpected response logging in: {res.text}" )
 
 
-    def send( self, url, postjson={} ):
+    def post( self, url, postjson={} ):
         """Send a POST query to the server.
 
-        If you're expecting a json-encoded response, you may want to use send_get_json()
+        Verifies that you're logged in, logs in if necessary.
+
+        If you're expecting a json-encoded response, you may want to use
+        send()
 
         Parameters
         ----------
@@ -135,7 +138,7 @@ class rkAuthClient:
         return res
 
 
-    def send_get_json( self, url, postjson={} ):
+    def send( self, url, postjson={} ):
         """Send a POST query to the server, parse the json response to a python object.
 
         Raises an exception if the server doesn't send back application/json
@@ -155,7 +158,7 @@ class rkAuthClient:
 
         """
 
-        res = self.send( url, postjson=postjson )
+        res = self.post( url, postjson=postjson )
         if res.headers.get('Content-Type')[:16] != 'application/json':
             raise RuntimeError( f"Expected json back from conductor but got "
                                 f"{res.headers.get('Content_Type')}" )
