@@ -27,7 +27,7 @@ def main():
     cursor.execute( q )
 
     q = ( "INSERT INTO authuser(id,username,displayname,email) "
-          "VALUES ('fdc718c3-2880-4dc5-b4af-59c19757b62d','test','Test User','testuser@mailhog')" )
+          "VALUES ('fdc718c3-2880-4dc5-b4af-59c19757b62d','browser_test','Test User','testuser@mailhog')" )
     cursor.execute( q )
     
     conn.commit()

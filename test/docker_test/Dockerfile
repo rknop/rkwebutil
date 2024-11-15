@@ -16,6 +16,7 @@ RUN apt-get update && apt-get -y upgrade && \
 RUN rm /usr/lib/python3.11/EXTERNALLY-MANAGED
 
 RUN pip3 --no-cache install \
+  pycryptodome \
   pyyaml \
   python-dateutil \
   pytz \
