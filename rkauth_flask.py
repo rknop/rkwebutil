@@ -459,6 +459,17 @@ def getpasswordresetlink():
             else:
                 webap_url = RKAuthConfig.webap_url
 
+            # HACK ALERT
+            # On NERSC Spin, because of the web proxying, the webap_url
+            #   was coming out at "http://" instead of "https://".  This
+            #   was even if it was originally contacted via https://.
+            #   Since this should never be used with http anyway, let's
+            #   just replace http with https.  This is a bit ugly, but
+            #   it should generally work, and we don't want to go down
+            #   the rabbit hole of figuring out actual URLs via web proxies
+            #   and so forth.
+            webap_url = webap_url.replace( "http://", "https://" )
+
             if RKAuthConfig.smtp_use_ssl:
                 ssl_context = ssl.create_default_context()
                 smtp = smtplib.SMTP_SSL( RKAuthConfig.smtp_server, RKAuthConfig.smtp_port, context=ssl_context )
