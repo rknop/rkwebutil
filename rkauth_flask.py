@@ -96,6 +96,9 @@
 # they may have additional columns.  The table names can be configured at the
 # call to RKAuthConfig.setdbparams().
 #
+# (NOTE: the authgroup and auth_user_group tables are not used unless
+# usegroups=True is passed to rkauth_flask.RKAuthConfig.setdbparams.)
+#
 #   authuser:
 #      id : UUID
 #      username : text
@@ -103,6 +106,15 @@
 #      email : text
 #      pubkey : text
 #      privkey : jsonb
+#
+#   authgroup
+#      id : UUID
+#      name : text
+#      description : text
+#
+#   auth_user_group:
+#      userid : UUID, foreign key to authuser.id
+#      groupid : UUID, foreign key to authgroupid
 #
 #   passwordlink:
 #      id : UUID
@@ -114,6 +126,7 @@ import re
 import pathlib
 import contextlib
 from collections import namedtuple
+from types import SimpleNamespace
 import binascii
 import uuid
 import datetime
@@ -154,6 +167,9 @@ class RKAuthConfig:
 
     authuser_table = "authuser"
     passwordlink_table = "passwordlink"
+    authgroup_table = "authgroup"
+    auth_user_group_link_table = "auth_user_group"
+    usegroups = False
 
     email_from = 'RKAuth <nobody@nowhere.org>'
     email_subject = 'RKAuth password reset'
@@ -178,6 +194,9 @@ class RKAuthConfig:
 
         authuser_table : name of the authuser table (defaults to "authuser")
         passwordlink_table : name of the passwordlink table (defaults to "passwordlink")
+        authgroup_table : name of the authgroup table (defaults to "authgroup")
+        auth_user_groups_link_table : name of the auth_user_group table (defaults to "auth_user_group")
+        usegroups : bool, use groups?  (defaults to False )
 
         email_from : the From line in password reset emails
         email_subject : the subject line in password reset emails
@@ -224,7 +243,13 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
     if ( ( userid is not None ) + ( username is not None ) + ( email is not None ) ) != 1:
         raise RuntimeError( "Specify exactly one of {userid,username,email}" )
 
-    q = f"SELECT * FROM {RKAuthConfig.authuser_table} "
+    q = f"SELECT u.*"
+    if RKAuthConfig.usegroups:
+        q += ",array_agg(g.name) AS groups"
+    q += f" FROM {RKAuthConfig.authuser_table} u "
+    if RKAuthConfig.usegroups:
+        q += ( f"LEFT JOIN {RKAuthConfig.auth_user_group_link_table} aug ON u.id=aug.userid "
+               f"LEFT JOIN {RKAuthConfig.authgroup_table} g ON aug.groupid=g.id " )
     subdict = {}
     if userid is not None:
         q += "WHERE id=%(uuid)s"
@@ -235,11 +260,18 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
     else:
         q += "WHERE email=%(email)s"
         subdict['email'] = email
+    if RKAuthConfig.usegroups:
+        q += " GROUP BY (u.id)"
 
     with _con_and_cursor() as con_and_cursor:
         cursor = con_and_cursor[1]
         cursor.execute( q, subdict )
         rows = cursor.fetchall()
+        rows = [ SimpleNamespace( **r._asdict() ) for r in rows ]
+        if RKAuthConfig.usegroups:
+            for row in rows:
+                if row.groups == [None]:
+                    row.groups = []
         if len(rows) > 1:
             if not many_ok:
                 raise RuntimeError( "Multiple users found, this shouldn't happen" )
@@ -257,7 +289,6 @@ def get_user_by_username( username ):
 
 def get_users_by_email( email ):
     return _get_user( email=email, many_ok=True )
-
 
 def create_password_link( useruuid ):
     PasswordLink = namedtuple( 'passwordlink', [ 'id', 'userid', 'expires' ] )
@@ -335,6 +366,7 @@ def getchallenge():
         flask.session['useruuid'] = user.id
         flask.session['userdisplayname'] = user.displayname
         flask.session['useremail'] = user.email
+        flask.session['usergroups'] = user.groups if hasattr( user, 'groups' ) else []
         flask.session['authuuid']= tmpuuid
         flask.session['authenticated'] = False
         retdata = { 'username': user.username,
@@ -365,9 +397,10 @@ def respondchallenge():
       200 application/json or 500 text/plain
          { 'status': 'ok',
            'message': 'User {username} logged in.',
-           'useruuid': str,        # The users database uuid primary key
-           'useremail': str,       # The user's email
-           'userdisplayname': str  # The user's display name
+           'useruuid': str,           # The users database uuid primary key
+           'useremail': str,          # The user's email
+           'userdisplayname': str,    # The user's display name
+           'usergroups': list of str  # groups user is a member of (or [] if not using groups)
          }
 
          or, in the event that the challenge is incorrect:
@@ -399,6 +432,7 @@ def respondchallenge():
                  'useruuid': str( flask.session["useruuid"] ),
                  'useremail': flask.session["useremail"],
                  'userdisplayname': flask.session["userdisplayname"],
+                 'usergroups': flask.session["usergroups"],
                 }
     except Exception as e:
         sys.stderr.write( f'{traceback.format_exc()}\n' )
@@ -644,7 +678,8 @@ def isauth():
           "username": str,          # username of authenticated user
           "useruuid": str,          # database primary key of authenticated user
           "useremail": str,         # email of authenticated user
-          "userdisplayname": str    # display name of authenticated user
+          "userdisplayname": str,   # display name of authenticated user
+          "usergroups": list of str # groups user is a member of (or [] if not using groups)
         }
 
       If the user is not authenticated, returns { "status": False }
@@ -657,6 +692,7 @@ def isauth():
                                 'useruuid': str( flask.session["useruuid"] ),
                                 'useremail': flask.session["useremail"],
                                 'userdisplayname': flask.session["userdisplayname"],
+                                'usergroups': flask.session["usergroups"],
                                } )
     else:
         return flask.jsonify( { 'status': False } );

@@ -47,7 +47,30 @@ class AuthTestBase:
 
 
     @pytest.fixture(scope='class')
-    def browser( self, user_created ):
+    def groups_created( self, user_created, database ):
+        try:
+            cursor = database.cursor()
+            cursor.execute( "INSERT INTO authgroup(id,name,description) "
+                            "VALUES ('3a4c85a1-c786-4895-8554-bbc2cd1c4238','testgroup1','Test Group 1')" )
+            cursor.execute( "INSERT INTO authgroup(id,name,description) "
+                            "VALUES ('ca73d2cb-82f2-4ae6-8e36-e7b2bd649532','testgroup2','Test Group 2')" )
+            cursor.execute( "INSERT INTO authgroup(id,name,description) "
+                            "VALUES ('d291755d-7441-404a-a89d-572a13aae10b','testgroup3','Test Group 3')" )
+            cursor.execute( "INSERT INTO auth_user_group(userid,groupid) "
+                            "VALUES ('fdc718c3-2880-4dc5-b4af-59c19757b62d','3a4c85a1-c786-4895-8554-bbc2cd1c4238')" )
+            cursor.execute( "INSERT INTO auth_user_group(userid,groupid) "
+                            "VALUES ('fdc718c3-2880-4dc5-b4af-59c19757b62d','ca73d2cb-82f2-4ae6-8e36-e7b2bd649532')" )
+            database.commit()
+            yield True
+        finally:
+            cursor = database.cursor()
+            cursor.execute( "DELETE FROM authgroup WHERE id IN ('3a4c85a1-c786-4895-8554-bbc2cd1c4238',"
+                            "'ca73d2cb-82f2-4ae6-8e36-e7b2bd649532','d291755d-7441-404a-a89d-572a13aae10b')" )
+            database.commit()
+
+
+    @pytest.fixture(scope='class')
+    def browser( self, user_created, groups_created ):
         opts = selenium.webdriver.FirefoxOptions()
         opts.add_argument( "--headless" )
 

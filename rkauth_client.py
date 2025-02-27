@@ -41,7 +41,15 @@ class rkAuthClient:
         self.username = username
         self.password = password
         self.verify = verify
+        self.clear_user()
+
+
+    def clear_user( self ):
         self.req = None
+        self.useruuid = None
+        self.useremail = None
+        self.userdisplaynae = None
+        self.usergroups = None
 
 
     def verify_logged_in( self ):
@@ -69,6 +77,7 @@ class rkAuthClient:
                     data = res.json()
                     if ( 'status' not in data ) or ( data['status'] != 'Logged out' ):
                         raise RuntimeError( f"Unexpected response logging out: {res.text}" )
+                    self.clear_user()
                     must_log_in = True
 
         if must_log_in:
@@ -105,6 +114,10 @@ class rkAuthClient:
             data = res.json()
             if ( ( data['status'] != 'ok' ) or ( data['username'] != self.username ) ):
                 raise RuntimeError( f"Unexpected response logging in: {res.text}" )
+            self.useruuid = data['useruuid']
+            self.useremail = data['useremail']
+            self.userdisplayname = data['userdisplayname']
+            self.usergroups = data['usergroups']
 
 
     def post( self, url, postjson={} ):

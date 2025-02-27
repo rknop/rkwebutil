@@ -34,6 +34,7 @@ var rkAuth = function( authdiv, webapurl, isauthcallback,
      *    useruuid
      *    useremail
      *    userdisplayname
+     *    usergroups
      *
      * Also needed: resetpasswd_start.js
      *
@@ -95,6 +96,7 @@ rkAuth.prototype.processCheckAuth = function( statedata, isauthcallback, isnotau
         this.useruuid = statedata.useruuid;
         this.useremail = statedata.useremail;
         this.userdisplayname = statedata.userdisplayname;
+        this.usergroups = statedata.usergroups;
         if ( isauthcallback != null )
             isauthcallback();
         else
@@ -126,6 +128,7 @@ rkAuth.prototype.loggedout = function( loggedoutcallback ) {
     this.useruuid = null;
     this.useremail = null;
     this.userdisplayname = null;
+    this.usergroups = null;
     if ( loggedoutcallback != null ) {
         loggedoutcallback()
     } else {
@@ -276,6 +279,7 @@ rkAuth.prototype.processChallengeResponse = function( retdata ) {
     this.useruuid = retdata.useruuid;
     this.useremail = retdata.useremail;
     this.userdisplayname = retdata.userdisplayname;
+    this.usergroups = retdata.usergroups;
     this.finishlogincallback( retdata );
 }
 
