@@ -237,11 +237,29 @@ rkWebUtil.dateUTCFormat = function(date)
 }
 
 rkWebUtil.validateWidgetDate = function( datestr ) {
+    return rkWebUtil._actually_validateWigetDate( datestr, false );
+}
+
+rkWebUtil.validateWidgetDateUTC = function( datestr ) {
+    return rkWebUtil._actually_validateWidgetDate( datestr, true );
+}
+
+
+rkWebUtil._actually_validateWidgetDate = function( datestr, assumeutc ) {
     if ( datestr.value.trim() == "" ) {
         datestr.value = ""
         return;
     }
-    let num = Date.parse( datestr.value.trim() );
+    let munged = datestr.value.trim()
+    if ( assumeutc ) {
+        if ( ( munged.substring( mugned.length-1 ) != 'Z' ) &&
+             ( munged.substring( munged.length-3 ) != 'UTC' )
+           ) {
+            munged += " UTC";
+        }
+    }
+
+    let num = Date.parse( munged );
     if ( isNaN(num) ) {
         window.alert( "Error parsing date " + datestr.value
                       + "\nNote that Javascript's Date.parse() doesn't seem to like AM or PM at the end; "
