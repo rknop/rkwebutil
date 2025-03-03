@@ -252,7 +252,7 @@ rkWebUtil._actually_validateWidgetDate = function( datestr, assumeutc ) {
     }
     let munged = datestr.value.trim()
     if ( assumeutc ) {
-        if ( ( munged.substring( mugned.length-1 ) != 'Z' ) &&
+        if ( ( munged.substring( munged.length-1 ) != 'Z' ) &&
              ( munged.substring( munged.length-3 ) != 'UTC' )
            ) {
             munged += " UTC";
