@@ -137,10 +137,9 @@ import ssl
 from email.message import EmailMessage
 from email.policy import EmailPolicy
 
-import psycopg2
-import psycopg2.extras
-import psycopg2.extensions
-psycopg2.extensions.register_adapter( dict, psycopg2.extras.Json )
+import psycopg
+import psycopg.rows
+import psycopg.types.json
 
 import flask
 import Crypto.PublicKey.RSA
@@ -227,9 +226,9 @@ class RKAuthConfig:
 
 @contextlib.contextmanager
 def _con_and_cursor():
-    dbcon = psycopg2.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
-                              user=RKAuthConfig.db_user, password=RKAuthConfig.db_password,
-                              cursor_factory=psycopg2.extras.NamedTupleCursor )
+    dbcon = psycopg.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
+                             user=RKAuthConfig.db_user, password=RKAuthConfig.db_password,
+                             row_factory=psycopg.rows.dict_row )
     cursor = dbcon.cursor()
 
     yield dbcon, cursor
@@ -267,7 +266,7 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
         cursor = con_and_cursor[1]
         cursor.execute( q, subdict )
         rows = cursor.fetchall()
-        rows = [ SimpleNamespace( **r._asdict() ) for r in rows ]
+        rows = [ SimpleNamespace( **r ) for r in rows ]
         if RKAuthConfig.usegroups:
             for row in rows:
                 if row.groups == [None]:
@@ -527,7 +526,12 @@ def getpasswordresetlink():
                             f"Here is the link; cut and paste it into your browser:\n"
                             f"\n"
                             f"{webap_url}/resetpassword?uuid={str(pwlink.id)}" )
-            smtp.send_message( msg, RKAuthConfig.email_from, to_addrs=user.email )
+            try:
+                smtp.send_message( msg, RKAuthConfig.email_from, to_addrs=user.email )
+            except Exception as ex:
+                flask.current_app.logger.exception( f"Exception sending mail from {RKAuthConfig.email_from} "
+                                                    f"to {user.email} with message {msg} : {ex}" )
+                raise
             smtp.quit()
             if len(sentto) > 0:
                 sentto += " "
@@ -568,10 +572,10 @@ def resetpassword():
         if pwlink is None:
             response += "<p>Invalid password reset URL.</p>\n</body></html>"
             return flask.make_response( response )
-        if pwlink.expires < datetime.datetime.now(pytz.utc):
+        if pwlink['expires'] < datetime.datetime.now(pytz.utc):
             response += "<p>Password reset link has expired.</p>\n</body></html>"
             return flask.make_response( response )
-        user = get_user_by_uuid( pwlink.userid )
+        user = get_user_by_uuid( pwlink['userid'] )
 
         response += f"<h2>Reset password for {user.username}</h2>\n"
         response += "<div id=\"authdiv\">"
@@ -589,7 +593,7 @@ def resetpassword():
         response += "</td></tr>\n</table>\n"
         response += "</div>\n"
         response += ( f"<input type=\"hidden\" name=\"linkuuid\" id=\"resetpasswd_linkid\" "
-                      f"value=\"{str(pwlink.id)}\">" )
+                      f"value=\"{str(pwlink['id'])}\">" )
         response += "</body>\n</html>\n"
         return flask.make_response( response )
     except Exception as e:
@@ -644,19 +648,22 @@ def changepassword():
 
         with _con_and_cursor() as con_and_cursor:
             con, cursor = con_and_cursor
-            cursor.execute( f"SELECT * FROM {RKAuthConfig.authuser_table} WHERE id=%(uuid)s", {'uuid': pwlink.userid} )
+            cursor.execute( f"SELECT * FROM {RKAuthConfig.authuser_table} WHERE id=%(uuid)s",
+                            {'uuid': pwlink['userid']} )
             rows = cursor.fetchall()
             if len(rows) == 0:
-                return "Unknown user id {pwlink.userid}; this shouldn't happen", 500
+                return f"Unknown user id {pwlink['userid']}; this shouldn't happen", 500
             user = rows[0]
 
             cursor.execute( f"UPDATE {RKAuthConfig.authuser_table} SET pubkey=%(pubkey)s,privkey=%(privkey)s "
                             f"WHERE id=%(uuid)s",
-                            { 'uuid': user.id,
+                            { 'uuid': user['id'],
                               'pubkey': flask.request.json['publickey'],
-                              'privkey': { 'privkey': flask.request.json['privatekey'],
-                                           'salt': flask.request.json['salt'],
-                                           'iv': flask.request.json['iv'] } } )
+                              'privkey': psycopg.types.json.Jsonb(
+                                  { 'privkey': flask.request.json['privatekey'],
+                                    'salt': flask.request.json['salt'],
+                                    'iv': flask.request.json['iv'] } ),
+                             } )
             cursor.execute( f"DELETE FROM {RKAuthConfig.passwordlink_table} WHERE id=%(uuid)s",
                             { 'uuid': flask.request.json['passwordlinkid'] } )
             con.commit()

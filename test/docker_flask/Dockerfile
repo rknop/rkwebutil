@@ -40,7 +40,7 @@ RUN source /venv/bin/activate && \
        flask-session \
        flask-sock \
        gunicorn \
-       psycopg2 \
+       psycopg \
        pycryptodome \
        python-dateutil \
        pytz \

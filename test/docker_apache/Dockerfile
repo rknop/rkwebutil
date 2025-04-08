@@ -34,7 +34,7 @@ RUN source /venv/bin/activate \
        flask \
        flask-session \
        flask-sock \
-       psycopg2 \
+       psycopg \
        pycryptodome \
        python-dateutil \
        pytz \

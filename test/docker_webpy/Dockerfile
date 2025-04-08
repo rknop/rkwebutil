@@ -31,7 +31,7 @@ RUN python3 -mvenv /venv
 
 RUN source /venv/bin/activate \
     && pip --no-cache install \
-       psycopg2 \
+       psycopg \
        pycryptodome \
        python-dateutil \
        pytz \

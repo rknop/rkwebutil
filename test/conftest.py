@@ -8,12 +8,12 @@ import time
 import requests
 import pytest
 
-import psycopg2
-import psycopg2.extras
+import psycopg
+import psycopg.rows
 
 @pytest.fixture(scope='module')
 def database():
-    conn = psycopg2.connect( host='postgres', user='postgres', password='fragile', dbname='test_rkwebutil',
-                             cursor_factory=psycopg2.extras.RealDictCursor )
+    conn = psycopg.connect( host='postgres', user='postgres', password='fragile', dbname='test_rkwebutil',
+                            row_factory=psycopg.rows.dict_row )
     return conn
 

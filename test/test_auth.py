@@ -15,7 +15,7 @@ import logging
 import pathlib
 import json
 
-import psycopg2
+import psycopg
 
 import selenium
 from selenium.common.exceptions import NoSuchElementException
@@ -285,7 +285,7 @@ class AuthTestBase:
         rows = cursor.fetchall()
         # assert len(rows) > 0
         assert len(rows) == 1
-        assert rows[0]['id'] == match.group(1)
+        assert rows[0]['id'] == uuid.UUID( match.group(1) )
 
     def test_reset_password( self, browser, reset_password, database ):
         cursor = database.cursor()
@@ -349,8 +349,8 @@ nRVct/brmHSH0KXam2bLZFECAwEAAQ==
                   }
         _id = uuid.uuid4()
 
-        conn = psycopg2.connect( host='postgres', port=5432, dbname='test_rkwebutil',
-                                 user='postgres', password='fragile' )
+        conn = psycopg.connect( host='postgres', port=5432, dbname='test_rkwebutil',
+                                user='postgres', password='fragile' )
         cursor = conn.cursor()
         cursor.execute( "INSERT INTO authuser( id, username, displayname, email, pubkey, privkey ) "
                         "VALUES (%(id)s, %(username)s, %(displayname)s, %(email)s, %(pubkey)s, %(privkey)s)",
@@ -366,8 +366,8 @@ nRVct/brmHSH0KXam2bLZFECAwEAAQ==
 
         yield True
 
-        conn = psycopg2.connect( host='postgres', port=5432, dbname='test_rkwebutil',
-                                 user='postgres', password='fragile' )
+        conn = psycopg.connect( host='postgres', port=5432, dbname='test_rkwebutil',
+                                user='postgres', password='fragile' )
         cursor = conn.cursor()
         cursor.execute( "DELETE FROM authuser WHERE id=%(id)s", { 'id': str(_id) } )
         conn.commit()

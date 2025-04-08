@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get -y upgrade && \
   apt-get -y install \
-    python3 python3-pip python3-psycopg2 python3-pytest tmux postgresql-client \
+    python3 python3-pip python3-psycopg python3-pytest tmux postgresql-client \
     firefox-esr elinks curl \
     && \
   apt-get clean && \

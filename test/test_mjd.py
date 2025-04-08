@@ -19,7 +19,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.remote.webelement import WebElement
 
 class TestMJD:
-    url = "https://flaskserver:8081/"
+    url = "https://flask:8080/"
 
     @pytest.fixture(scope='class')
     def browser( self ):
