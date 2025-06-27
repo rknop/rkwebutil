@@ -556,6 +556,212 @@ rkWebUtil.colorIntToCSSColor = function( colint ) {
 // **********************************************************************
 // **********************************************************************
 // **********************************************************************
+// A table that lets you sort by columns.
+//
+// Depends on there being a "link" css class
+
+rkWebUtil.SortableTable = class
+{
+    constructor( data, rowrenderer=null, fields=null, inprops )
+    {
+        let self = this;
+
+        var props = { 'fieldmap': null,
+                      'dictoflists': true,
+                      'nosortfields': [],
+                      'initsort': [],
+                      'tableclasses': [],
+                      'colorclasses': [],
+                      'colorlength': 3 };
+        Object.assign( props, inprops )
+
+        if ( data == null ) {
+            alert( "data cannot be null" );
+            return
+        }
+        if ( rowrenderer == null ) {
+            alert( "rowrenderer cannot be null" );
+            return;
+        }
+        if ( fields == null ) {
+            alert( "fields cannot be null" );
+            return
+        }
+        this.fields = [...fields];
+        if ( props.fieldmap == null ) {
+            props.fieldmap = {};
+            for ( let f of fields ) {
+                props.fieldmap[f] = f;
+            }
+        }
+        this.data = data;
+        this.fieldmap = props.fieldmap;
+        this.dictoflists = props.dictoflists;
+        this.nosortfields = props.nosortfields;
+        this.sortfields = [...props.initsort];
+        this.tableclasses = [...props.tableclasses];
+        this.colorclasses = [...props.colorclasses];
+        this.colorlength = props.colorlength;
+
+        this.table = rkWebUtil.elemaker( "table", null, { "classes": this.tableclasses } );
+        this.addtableheader();
+
+        this.tablerows = [];
+        let colordex = 0;
+        let countdown = this.colorlength;
+
+        let dorow = (i) => {
+            if ( countdown == 0 ) {
+                colordex += 1;
+                if ( colordex >= self.colorclasses.length ) colordex = 0;
+                countdown = self.colorlength;
+            }
+            countdown -= 1;
+
+            let tr;
+            if ( self.dictoflists ) {
+                tr = rowrenderer( self.data, i );
+            } else {
+                tr = rowrenderer( i );
+            }
+            if ( colordex < self.colorclasses.length ) {
+                tr.classList.add( self.colorclasses[colordex] );
+            }
+            self.table.appendChild( tr );
+            self.tablerows.push( tr );
+        }
+
+        if ( this.dictoflists ) {
+            for ( let i in data[this.fieldmap[fields[0]]] ) {
+                dorow( i );
+            }
+        }
+        else {
+            for ( let i of data ) {
+                dorow( i );
+            }
+        }
+    }
+
+    addtableheader()
+    {
+        let self = this;
+        let subscripts = [ '₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉' ];
+
+        let tr = rkWebUtil.elemaker( "tr", this.table );
+        for ( let field of this.fields ) {
+            let th = rkWebUtil.elemaker( "th", tr );
+            if ( this.nosortfields.indexOf( field ) >= 0 ) {
+                th.appendChild( document.createTextNode( field ) )
+            } else {
+                let clickfunc = (e) => {
+                    if ( self.sortfields.indexOf( '+' + field ) >= 0 )
+                        self.resort_rows( field, false )
+                    else
+                        self.resort_rows( field, true );
+                };
+                let span = rkWebUtil.elemaker( "span", th, { "text": field,
+                                                             "classes": [ "link" ],
+                                                             "click": clickfunc } );
+                let sortdex = self.sortfields.indexOf( '+' + field );
+                if ( sortdex == 0 ) {
+                    th.appendChild( document.createTextNode( '▲' ) );
+                }
+                else if ( ( sortdex > 0 ) && ( sortdex <= 9 ) ) {
+                    th.appendChild( document.createTextNode( '▵' + subscripts[sortdex] ) );
+                }
+                sortdex = self.sortfields.indexOf( '-' + field );
+                if ( sortdex == 0 ) {
+                    th.appendChild( document.createTextNode( '▼' ) );
+                }
+                else if ( ( sortdex > 0 )  && ( sortdex <= 9 ) ) {
+                    th.appendChild( document.createTextNode( '▿' + subscripts[sortdex] ) )
+                }
+            }
+        }
+    }
+
+    resort_rows( field, increasing )
+    {
+        let self = this;
+
+        let sorter = (a, b) => {
+            for ( let field of self.sortfields ) {
+                let incr = ( field[0] == '+' );
+                let f = field.substring(1);
+                let aval, bval;
+                if ( self.dictoflists ) {
+                    aval = self.data[ self.fieldmap[f] ][a];
+                    bval = self.data[ self.fieldmap[f] ][b];
+                }
+                else {
+                    aval = self.data[a][ self.fieldmap[f] ];
+                    bval = self.data[b][ self.fieldmap[f] ];
+                }
+
+                if ( aval  > bval ) {
+                    if ( incr )
+                        return 1;
+                    else
+                        return -1;
+                }
+                else if ( aval < bval ) {
+                    if ( incr )
+                        return -1;
+                    else
+                        return 1;
+                }
+            }
+            return 0;
+        };
+
+        // Remove field from the sort order if it's there
+        let i = 0;
+        while ( i < this.sortfields.length ) {
+            if ( this.sortfields[i].substring( 1 ) == field )
+                this.sortfields.splice( i, 1 );
+            else
+                i += 1;
+        }
+        // Add field to beginning of sort order
+        if ( increasing )
+            this.sortfields.splice( 0, 0, '+' + field );
+        else
+            this.sortfields.splice( 0, 0, '-' + field );
+
+        let dexen = null;
+        if ( self.dictoflists ) {
+            dexen = Array.from( Array( this.data[ this.fieldmap[ this.fields[0] ] ].length ).keys() );
+        }
+        else {
+            dexen = Array.from( Object.keys( this.data ) );
+        }
+        dexen.sort( sorter );
+
+        rkWebUtil.wipeDiv( this.table );
+        this.addtableheader();
+
+        let colordex = 0;
+        let countdown = this.colorlength;
+        for ( let dex of dexen ) {
+            if ( countdown == 0 ) {
+                colordex += 1;
+                if ( colordex >= this.colorclasses.length ) colordex = 0;
+                countdown = this.colorlength;
+            }
+            countdown -= 1;
+
+            this.tablerows[ dex ].classList.remove( ...this.colorclasses )
+            if ( colordex < this.colorclasses.length )
+                this.tablerows[ dex ].classList.add( this.colorclasses[colordex] );
+            this.table.appendChild( this.tablerows[ dex ] );
+        }
+    }
+};
+
+// **********************************************************************
+// **********************************************************************
+// **********************************************************************
 // Class for connecting to a given web server
 
 rkWebUtil.Connector = class
