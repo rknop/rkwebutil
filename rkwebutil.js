@@ -558,6 +558,60 @@ rkWebUtil.colorIntToCSSColor = function( colint ) {
 // **********************************************************************
 // A table that lets you sort by columns.
 //
+// To use:
+//   * Instantiate the object, passing the stuff desribed in "to create".
+//   * Access the created table with the table property of the object.
+//     This is the thing you stick in your document.
+//   * (Possibly, this may be a bad idea.)  Access the sorted rows with
+//     the tablerows property of the object.
+//
+// To create:
+//   * data : A data array that is in one of two formats:
+//       * A list of dicts.  Each dict has one entry that is the value for each
+//             column in one row.  All dicts in the list must have the same fields.
+//             (...may not actually need to be a list of dicts?  Rows will be accessed
+//              via "for ( let row of data )", so whatever works with that.)
+//       * A dict of lists.  The keys of the dict correspond to the columns of the table.
+//             All lists must have the same length.  Must set the "dictoflists" field
+//             of props to true in this case.
+//
+//   * rowrenderer : A function that, given data and either a row dict (in the case where
+//     data is a list of dicts) or an index (in the case where data is a dict of lists),
+//     returns a tr document element that has that row of the table.
+//
+//     This rowrenderer will be called exactly once during objection creation for each row.
+//     As such, it's safe for you to do things like cache the rows created yourself inside
+//     this function, if for some reason you want to poke into the table and edit the rows
+//     later.
+//
+//   * fields : An array of strings, the things to show in the columns of the header row.
+//     For the table to make sense, rowrenderer must render each row with the same number
+//     of columns as there are elements in fields, and the columns of each row must be
+//     in the order given by fields.
+//
+//   * props : optional additional arugments in a structure, can include:
+//       * dictoflists: True if data is a dict of lists; otherwise, the code
+//         will assume that data is a list of dicts.
+//       * fieldmap : a map of column header -> field name.  Field name is either
+//         a key of data (if data is a dict of lists), or a key of each element.
+//         of data (if data is a list of dicts).
+//       * initsort : list of strings.  A description of how the data is initially sorted.
+//            this is *only* used to render the table headers, the rows
+//            is not sorted by this class when the table is first displayed.
+//            This is a list of fields; each element of the list is a string
+//            that should also be an element of fields, only starting with '+'
+//            or '-' for incrementing or decrementing respectively.
+//       * nosortfields : a list of fields (column header strings) that
+//         the user should *not* be able to sort by.  By default, the
+//         user can sort by all fields.
+//       * tableclasses : list: CSS class names to assign to the table as a whole
+//       * colorclasses : a list of CSS class names, which are intended to hold
+//         background color styling.
+//       * colorlength : The first colorlength rows will be given the first class
+//         in colorlcasses.  The second colorlength rows the second, the third etc.,
+//         wrapping back to the first once the list is exhausted.  Used for
+//         things like alternating grey and white backgrounds every three rows.
+//
 // Depends on there being a "link" css class
 
 rkWebUtil.SortableTable = class
@@ -758,6 +812,7 @@ rkWebUtil.SortableTable = class
         }
     }
 };
+
 
 // **********************************************************************
 // **********************************************************************
