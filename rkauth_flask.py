@@ -252,7 +252,7 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
                f"LEFT JOIN {RKAuthConfig.authgroup_table} g ON aug.groupid=g.id " )
     subdict = {}
     if userid is not None:
-        q += "WHERE id=%(uuid)s"
+        q += "WHERE u.id=%(uuid)s"
         subdict['uuid'] = userid
     elif username is not None:
         q += "WHERE username=%(username)s"
