@@ -151,7 +151,7 @@ SVGPlot.Plot = function( inparams = {} )
                     "equalaspect": false,
                     "nozoomdocstring": false,    // Make this "true" to suppress the "Shift+LMB to zoom" text
                     "zoommode": "full",          // "full" (show all), "default", or "manual"
-                    "defaultlimits": []
+                    "defaultlimits": []          // minx, maxx, miny, maxy
                  };
     Object.assign( this.params, inparams );
 
