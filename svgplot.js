@@ -100,7 +100,8 @@ SVGPlot.generateTickValues = function( min, max, sp )
 
 SVGPlot.Plot = function( inparams = {} )
 {
-    this.params = { "divid": "svgplotdiv",
+    this.params = { "name": "svgplot",      // Must be unique for each svg plot on the same page
+                    "divid": "svgplotdiv",
                     "svgid": "svgplotsvg",
                     "showerrbar": true,
                     "title": null,
@@ -155,6 +156,7 @@ SVGPlot.Plot = function( inparams = {} )
                  };
     Object.assign( this.params, inparams );
 
+    this.name = this.params.name.replace( " ", "_" );
     this.topdiv = document.createElement( "div" );
     this.topdiv.setAttribute( "class", "svgplottopdiv" );
 
@@ -589,46 +591,47 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var style = document.createElementNS( ns, "style" );
     svg.appendChild( style );
 
-    var styletext = ".svgplotborderfill { stroke: none; fill: " + this.params.borderfill + "; }\n";
+    var styletext = ".svgplotborderfill-" + this.name + " { stroke: none; fill: " + this.params.borderfill + "; }\n";
 
-    styletext += ".svgplotborderstroke { fill: none; stroke: " + this.params.bordercolor +
+    styletext += ".svgplotborderstroke-" + this.name + " { fill: none; stroke: " + this.params.bordercolor +
         "; stroke-width: " + this.params.borderwid;
     if ( this.params.strokedash != null )
         styletext += "; stroke-dasharray: " + this.params.borderdash.join();
     styletext += "; }\n";
 
-    styletext += ".svgplotaxes { stroke: " + this.params.axescolor + "; stroke-width: " + this.params.axeswid;
+    styletext += ".svgplotaxes-" + this.name + " { stroke: " + this.params.axescolor +
+        "; stroke-width: " + this.params.axeswid;
     if ( this.params.axesdash )
         styletext += "; stroke-dasharray: " + this.params.axesdash.join();
     styletext += "; fill: none }\n";
 
-    styletext += ".svgplottick { stroke: " + this.params.tickcolor + "; stroke-width: "
+    styletext += ".svgplottick-" + this.name + " { stroke: " + this.params.tickcolor + "; stroke-width: "
         + this.params.tickwid + "; }\n";
-    styletext += ".svgplotsubtick { stroke: " + this.params.subtickcolor + "; stroke-width: "
+    styletext += ".svgplotsubtick-" + this.name + " { stroke: " + this.params.subtickcolor + "; stroke-width: "
         + this.params.subtickwid + "; }\n";
-    styletext += ".svgplotticklabel { font-family: " + this.params.axislabelfamily + "; ";
+    styletext += ".svgplotticklabel-" + this.name + " { font-family: " + this.params.axislabelfamily + "; ";
     styletext += "font-size: " + this.params.axislabelsize + "px; font-weight: " + this.params.axislabelweight;
     styletext += "; font-style: " + this.params.axislabelstyle + "; }\n";
 
-    styletext += ".svgplotaxislabel { font-family: " + this.params.axistitlefamily + "; ";
+    styletext += ".svgplotaxislabel-" + this.name + " { font-family: " + this.params.axistitlefamily + "; ";
     styletext += "font-size: " + this.params.axistitlesize + "px; font-weight: " + this.params.axistitleweight;
     styletext += "; font-style: " + this.params.axistitlestyle + "; }\n";
 
-    styletext += ".svgplottitle { font-family: " + this.params.titlefamily + "; ";
+    styletext += ".svgplottitle-" + this.name + " { font-family: " + this.params.titlefamily + "; ";
     styletext += "font-size: " + this.params.titlesize + "px; font-weight: " + this.params.titleweight;
     styletext += "; font-style: " + this.params.titlestyle + " }\n";
 
-    styletext += ".svgplotgrid { stroke: " + this.params.gridcolor + "; stroke-width: "
+    styletext += ".svgplotgrid-" + this.name + " { stroke: " + this.params.gridcolor + "; stroke-width: "
         + this.params.gridwid + "; }\n";
 
     for ( var i in this.datasets ) {
-        styletext += ".dataset" + i + " { stroke:" + this.datasets[i].color + "; ";
+        styletext += ".dataset" + i + "-" + this.name + " { stroke:" + this.datasets[i].color + "; ";
         styletext += "stroke-width: " + this.datasets[i].linewid + "; ";
         if ( this.datasets[i].dash != null )
             styletext += "; stroke-dasharray: " + this.datasets[i].dash.join() + "; ";
         styletext += "fill: none; }\n";
 
-        styletext += ".errorbar" + i + " { stroke: " + this.datasets[i].color + "; ";
+        styletext += ".errorbar" + i + "-" + this.name + " { stroke: " + this.datasets[i].color + "; ";
         styletext += "stroke-width: " + this.datasets[i].errbarwid + "; ";
         styletext += "fill: none; }\n";
     }
@@ -644,7 +647,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var titleheight = 0;
     if ( this.params.title != null ) {
         title = document.createElementNS( ns, "text" );
-        title.setAttribute( "class", "svgplottitle" );
+        title.setAttribute( "class", "svgplottitle-" + this.name );
         title.appendChild( document.createTextNode( this.params.title ) );
         svg.appendChild( title );
         let size = this.elemSize( title );
@@ -656,7 +659,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var xtitleheight = 0;
     if ( this.params.xtitle != null ) {
         xtitle = document.createElementNS( ns, "text" );
-        xtitle.setAttribute( "class", "svgplotaxislabel" );
+        xtitle.setAttribute( "class", "svgplotaxislabel-" + this.name );
         xtitle.appendChild( document.createTextNode( this.params.xtitle ) );
         svg.appendChild( xtitle );
         let size = this.elemSize( xtitle );
@@ -668,7 +671,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var ytitleheight = 0;
     if ( this.params.ytitle != null ) {
         ytitle = document.createElementNS( ns, "text" );
-        ytitle.setAttribute( "class", "svgplotaxislabel" );
+        ytitle.setAttribute( "class", "svgplotaxislabel-" + this.name );
         ytitle.appendChild( document.createTextNode( this.params.ytitle ) );
         svg.appendChild( ytitle );
         let size = this.elemSize( ytitle );
@@ -683,7 +686,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var xlabelems = [];
     for ( var i in xlabels ) {
         let text = document.createElementNS( ns, "text" );
-        text.setAttribute( "class", "svgplotticklabel" );
+        text.setAttribute( "class", "svgplotticklabel=" + this.name );
         text.appendChild( document.createTextNode( xlabels[i] ) );
         svg.appendChild( text );
         xlabelems.push( text );
@@ -700,7 +703,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var ylabwid = 0;
     for ( var i in ylabels ) {
         let text = document.createElementNS( ns, "text" );
-        text.setAttribute( "class", "svgplotticklabel" );
+        text.setAttribute( "class", "svgplotticklabel-" + this.name );
         text.appendChild( document.createTextNode( ylabels[i] ) );
         svg.appendChild( text );
         let size = this.elemSize( text );
@@ -752,7 +755,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             xsubticks = retval.nsubticks;
             for ( let i in xlabels ) {
                 let text = document.createElementNS( ns, "text" )
-                text.setAttribute( "class", "svgplotticklabel" );
+                text.setAttribute( "class", "svgplotticklabel-" + this.name );
                 text.appendChild( document.createTextNode( xlabels[i] ) );
                 svg.appendChild( text );
                 xlabelems.push( text );
@@ -776,7 +779,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             ysubticks = retval.nsubticks;
             for ( let i in ylabels ) {
                 let text = document.createElementNS( ns, "text" )
-                text.setAttribute( "class", "svgplotticklabel" );
+                text.setAttribute( "class", "svgplotticklabel-" + this.name  );
                 text.appendChild( document.createTextNode( ylabels[i] ) );
                 svg.appendChild( text );
                 ylabelems.push( text );
@@ -793,7 +796,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
 
     if ( this.params.borderfill != "none" ) {
         rect = document.createElementNS( ns, "rect" );
-        rect.setAttribute( "class", "svgplotborderfill" );
+        rect.setAttribute( "class", "svgplotborderfill-" + this.name );
         rect.setAttribute( "x", leftedge.toFixed( 2 ) );
         rect.setAttribute( "y", topedge.toFixed( 2 ) );
         rect.setAttribute( "width", plotwidth.toFixed( 2 ) );
@@ -835,7 +838,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             line.setAttribute( "y1", bottomedge );
             line.setAttribute( "x2", x.toFixed( 2 ) );
             line.setAttribute( "y2", topedge );
-            line.setAttribute( "class", "svgplotgrid" );
+            line.setAttribute( "class", "svgplotgrid-" + this.name );
             svg.appendChild( line );
         }
         let line = document.createElementNS( ns, "line" );
@@ -843,7 +846,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
         line.setAttribute( "y1", ( bottomedge - this.params.ticklen/2 ).toFixed( 2 ) );
         line.setAttribute( "x2", x.toFixed( 2 ) );
         line.setAttribute( "y2", ( bottomedge + this.params.ticklen/2 ).toFixed( 2 ) );
-        line.setAttribute( "class", "svgplottick" );
+        line.setAttribute( "class", "svgplottick-" + this.name );
         svg.appendChild( line );
         let size = this.elemSize( xlabelems[i] );
         xlabelems[i].setAttribute( "x", ( x - size.width/2 ).toFixed( 2 ) );
@@ -858,7 +861,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
                 line.setAttribute( "y1", ( bottomedge - this.params.subticklen/2 ).toFixed( 2 ) );
                 line.setAttribute( "x2", tickx.toFixed( 2 ) );
                 line.setAttribute( "y2", ( bottomedge + this.params.subticklen/2 ).toFixed( 2 ) );
-                line.setAttribute( "class", "svgplotsubtick" );
+                line.setAttribute( "class", "svgplotsubtick-" + this.name );
                 svg.appendChild( line );
             }
         }
@@ -876,7 +879,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             line.setAttribute( "y1", y.toFixed( 2 ) );
             line.setAttribute( "x2", rightedge );
             line.setAttribute( "y2", y.toFixed( 2 ) );
-            line.setAttribute( "class", "svgplotgrid" );
+            line.setAttribute( "class", "svgplotgrid-" + this.name );
             svg.appendChild( line );
         }
         let line = document.createElementNS( ns, "line" );
@@ -884,7 +887,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
         line.setAttribute( "y1", y.toFixed( 2 ) );
         line.setAttribute( "x2", ( leftedge + this.params.ticklen/2 ).toFixed( 2 ) );
         line.setAttribute( "y2", y.toFixed( 2 ) );
-        line.setAttribute( "class", "svgplottick" );
+        line.setAttribute( "class", "svgplottick-" + this.name );
         svg.appendChild( line );
         let size = this.elemSize( ylabelems[i] );
         ylabelems[i].setAttribute( "x", ( leftedge - this.params.ticklen - size.width ).toFixed( 2 ) );
@@ -900,7 +903,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
                 line.setAttribute( "y1", ticky.toFixed( 2 ) );
                 line.setAttribute( "x2", ( leftedge + this.params.subticklen/2 ).toFixed( 2 ) );
                 line.setAttribute( "y2", ticky.toFixed( 2 ) );
-                line.setAttribute( "class", "svgplotsubtick" );
+                line.setAttribute( "class", "svgplotsubtick-" + this.name );
                 svg.appendChild( line );
             }
         }
@@ -910,7 +913,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
 
     if ( this.params.borderwid > 0 && this.params.borderstroke != "none" ) {
         rect = document.createElementNS( ns, "rect" );
-        rect.setAttribute( "class", "svgplotborderstroke" );
+        rect.setAttribute( "class", "svgplotborderstroke-" + this.name  );
         rect.setAttribute( "x", leftedge.toFixed( 2 ) );
         rect.setAttribute( "y", topedge.toFixed( 2 ) );
         rect.setAttribute( "width", plotwidth.toFixed( 2 ) );
@@ -961,7 +964,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             + leftedge.toFixed(2) +") view-box"
         if ( dataset.linewid > 0 ) {
             var polyline = document.createElementNS( ns, "polyline" );
-            polyline.setAttribute( "class", "dataset" + j );
+            polyline.setAttribute( "class", "dataset" + j + "-" + this.name );
             polyline.setAttribute( "points", points )
             polyline.setAttribute( "clip-path", clippath );
             if ( dataset.marker != null ) {
@@ -973,7 +976,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
         } else if ( dataset.marker != null ) {
             for ( let i in xpxes ) {
                 var polyline = document.createElementNS( ns, "polyline" );
-                polyline.setAttribute( "class", "dataset" + j );
+                polyline.setAttribute( "class", "dataset" + j + "-" + this.name );
                 polyline.setAttribute( "points", "" + xpxes[i] + "," + ypxes[i] );
                 polyline.setAttribute( "clip-path", clippath );
                 polyline.setAttribute( "marker-start", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
@@ -990,7 +993,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
                     let leftdx =  this.dataToSVG( dataset._x[i]-dataset._dx[i], dataset._y[i], dataset );
                     let rightdx = this.dataToSVG( dataset._x[i]+dataset._dx[i], dataset._y[i], dataset );
                     let line = document.createElementNS( ns, "line" );
-                    line.setAttribute( "class", "errorbar" + j );
+                    line.setAttribute( "class", "errorbar" + j + "-" + this.name );
                     line.setAttribute( "x1", leftdx.x );
                     line.setAttribute( "y1", leftdx.y );
                     line.setAttribute( "x2", rightdx.x );
@@ -1004,7 +1007,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
                     let botdy = this.dataToSVG( dataset._x[i], dataset._y[i]-dataset._dy[i], dataset );
                     let topdy = this.dataToSVG( dataset._x[i], dataset._y[i]+dataset._dy[i], dataset );
                     let line = document.createElementNS( ns, "line" );
-                    line.setAttribute( "class", "errorbar" + j );
+                    line.setAttribute( "class", "errorbar" + j + "-" + this.name );
                     line.setAttribute( "x1", botdy.x );
                     line.setAttribute( "y1", botdy.y );
                     line.setAttribute( "x2", topdy.x );
@@ -1453,7 +1456,7 @@ SVGPlot.Dataset.markerCode = function( markername, markercolor, markersize, mark
     }
     else if ( markername == "uptriangle" || markername == "filleduptriangle" ) {
         var triangle = document.createElementNS( ns, "polyline" );
-        triangle.setAttribute( "points", "0,0 5,10 10,0 0,0" );
+        triangle.setAttribute( "points", "0,10 5,0 10,10 0,10" );
         if ( markername == "filleduptriangle" ) {
             triangle.setAttribute( "fill", markercolor );
             triangle.setAttribute( "stroke", "none" );
