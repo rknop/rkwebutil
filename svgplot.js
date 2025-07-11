@@ -272,6 +272,15 @@ SVGPlot.generateTickValues = function( min, max, sp )
 //     vertically to share the same xaxis.  In that case, for all plots, you
 //     would set defaultlimits = [ xmin, xmax, null, null ].  The nulls mean
 //     that each plot has an automatically determined default vertical scale.
+//     (This may be ignored if zoommode is not "default"; ROB check this.)
+//
+//   nosuppresszerox : bool
+//     If true, will make sure that 0 is included in the default x range.  Ignored if you set
+//     an xmin in defaultlimits.
+//
+//   nosuppresszeroy : bool
+//     If true, will make sure that 0 in included in the default y range.  Ignored if you set
+//     a ymin in defaultlimits.
 //
 // ACESSIBLE PROPERTIES
 // ====================
@@ -348,7 +357,9 @@ SVGPlot.Plot = function( inparams = {} )
                     "equalaspect": false,
                     "nozoomdocstring": false,
                     "zoommode": "full",
-                    "defaultlimits": []
+                    "defaultlimits": [],
+                    "nosuppresszerox": false,
+                    "nosuppresszeroy": false,
                   };
     Object.assign( this.params, inparams );
 
@@ -707,6 +718,8 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             ymax =  this.params.minautoyrange/2;
         }
         else {
+            if ( this.params.nosuppresszerox && ( xmin > 0 ) ) xmin = 0;
+            if ( this.params.nosuppresszeroy && ( ymin > 0 ) ) ymin = 0;
             let xmid = ( xmax + xmin ) / 2
             let ymid = ( ymax + ymin ) / 2;
             let dx = ( xmax-xmin ) * 1.1;
