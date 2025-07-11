@@ -1,12 +1,28 @@
 /**
  * This file is part of rkwebutil
  *
- * rkwebutil is Copyright 2023-2024 by Robert Knop
+ * rkwebutil is Copyright 2023-2025 by Robert Knop
  *
  * rkwebutil is free software under the BSD 3-clause license (see LICENSE)
  */
 
 var SVGPlot = {};
+SVGPlot.numplots = 0;
+SVGPlot.numdatasets = 0;
+
+// **********************************************************************
+// Utility function for making an svg element
+
+SVGPlot.svg = function()
+{
+    let ns = "http://www.w3.org/2000/svg";
+    let svg = document.createElementNS( ns, "svg" );
+    // I haven't figured out how the hell to get the xmlns attribute in there.
+    // Firefox yells at me if I try setAttributeNS, and it doesn't do anything
+    // if I do setAttribute
+    svg.setAttributeNS( 'http://www.w3.org/2000/xmlns/', "xmlns", ns );
+    return svg;
+}
 
 // **********************************************************************
 // Utility function for generating a series of axis labels that are
@@ -75,34 +91,214 @@ SVGPlot.generateTickValues = function( min, max, sp )
 }
 
 // **********************************************************************
-// SVGPlot.Plot encapsulates a single plot.  Key properties include the
-// following. Things that start with "params." can be set at instantiation
-// as properties of the one argument to the constructor, though without
-// the "params." in their name.  (See the "params" variable in constructor.)
-//    topdiv -- a div to embed.  You can put other things in here too.  Will
-//              have a row of buttons at the top, then div.
-//    buttonbox -- a div, the part of the top row that has buttons
-//    docbox -- a div, the part of the top row that has text
-//    div -- The div in which the svg plot goes  (read only)
-//    svg -- The svg element.  Gets regenerated/replaced a lot (read only)
+// SVGPlot.Plot encapsulates a single plot.
 //
-// CSS classes that should be defined (see svgplot.css for template, need some layout stuff to work)
-//    div.svgplottopdiv -- Main div for plot interface.
-//    div.svgplotdiv -- Actual plot goes in here
-//    div.svgplothbox -- flex box that lays out horizontally
-//    [ div.svgplotvbox -- flex box that lays out vertically ] [ not used? ]
-//    .svgplotsvg -- The actual svg.  Plot styling is done inline, as
-//                   it was a nightmare trying to get external style sheets to
-//                   work.  That also means the svg stands alone for plot rendering
+// REQUIRED CSS CLASSES
+// ====================
+// The following CSS classes must be defined, as svgplot uses them.
+// See "svgplot.css" for a set of examples.  (You can copy these into
+// your own css file to use as defaults.)
 //
-// svg viewbox is always params.width x params.height, default 1024×768
+//    div.svgplottopdiv : main div for plot interface
+//
+//    div.svgplotdiv : actual plot goes in here
+//
+//    div.svgplothbox : flex box that lays out horizontally
+//
+//    [ div.svgplotvbox : flex box that lays out vertically... not used? ]
+//
+//    div.svgplotbuttonbox : An hbox on the top that holds buttons
+//
+//    div.svgplotdocbox : An hbox on the top that holds brief documetnation strings
+//
+//   .svgplotsvg : The actual svg.  Plot styling is done inline, as it was
+//       a nightmare trying to get external style sheets to work.  As a beneficial
+//       side effect of that, the svg stands alone for plot rendering.
+//
+// CONSTRUCTOR PARAMETERS
+// ======================
+// Parameters are passed as a single object, which can optionally have any
+//   of the following:
+//
+//   name : string
+//     Name of the plot.  Defaults to "svgplot-{n}", where n is an incrementing integer.
+//     No two svg plots on the same page may have the same name, or ids and css will
+//     get totally screwed up.
+//
+//   divid : string
+//     id of the div in which the svg plot lives.  Defaults to "svgplotdiv-{name}".
+//
+//   svgid : string
+//     id of the svg document element.  Defaults to "svgpltosvg-{name}".
+//
+//
+//   showerrorbar : true
+//     Boolean, show error bars if they exist.  (Non-existent error bars won't be shown in any event....)
+//
+//   title : string
+//     If given, the title at the top of the plot
+//
+//   xtitle : string
+//     If given, the x-axis title
+//
+//   ytitle : string
+//     If given, the y-axis title
+//
+//   width, height : int
+//     The svg viewbox width and height.  Defaults to 1024x768.  You only need to know this if you're
+//     going to be trying to do funky stuff with the svg outside of the methods of this class.
+//     You can change these to change the aspect ratio of the plot.  (Also affects things like
+//     the meanings of font sizes, etc.)
+//
+//   left, right, bottom, top : ?
+//
+//   flipx, flipy : bool
+//     If either of these are true, flip that axis.  That is, if flipy
+//     is true, then bigger values of y will be lower on the plot.
+//     (Useful for plotting magnitudes.)
+//
+//   pagemargin : int
+//     default 10
+//
+//   borderwid : int
+//     default 2
+//
+//   bordercolor : color string
+//     Color of the overall border.  Default "black"
+//
+//   borderfill : color string
+//     The background color of the whole plot.  Default "#eeeeee"
+//
+//   borderdash : ?
+//     default null
+//
+//   axeswid : int
+//     default 0
+//
+//   axescolor : color string
+//     default "black"
+//
+//   ticklen : int
+//     default 10
+//
+//   tickwid : int
+//     default 2
+//
+//   tickcolor : color string
+//     default "black"
+//
+//   subticklen: int
+//     default 5
+//
+//   subtickwid : int
+//     default 2
+//
+//   subtickcolor : color string
+//     default "black"
+//
+//   titlefamily : font string
+//     font family of the top title.  Default "sans-serif"
+//
+//   titlestyle : string
+//     font style of the top title.  Default "normal".
+//
+//   titleweight : string
+//     font weight of the top title.  Default "bold".
+//
+//   titlesize : int
+//     font size of hte top title.  Default 32.
+//
+//   axistitlefamily : font string
+//     font family of the x and y axis titles.  Default "serif"
+//
+//   axistitlestyle : string
+//     font style of the x and y axis titles.  Default "italic"
+//
+//   axistitleweight : string
+//     font weight of the x and y axis titles.  Default "normal"
+//
+//   axistitlesize : int
+//     font size of the x and y axis titles.  Default 28
+//
+//   axislabelfamily : string
+//     font size of the numeric axis labels.  Defaut "serif"
+//
+//   axislabelstyle : string
+//     font style of the numeric axis labels.  Default "normal"
+//
+//   axislabelweight : string
+//     font weight of the numeric axis labels.  Default "bold"
+//
+//   axislabelsize : int
+//     font size of the numeric axis labels.  Default 24
+//
+//   gridwid : int
+//     default 2
+//
+//   gridcolor : color string
+//     default "#aaaaaa"
+//
+//   zoomboxborder : color string
+//     default "black"
+//
+//   zoomboxcolor : color string
+//     default "black"
+//
+//   zoomboxopacity : float
+//     default 0.25
+//
+//   minautoxrange : float
+//     If there aren't enough points in x to automatically determine a plot range,
+//     or if the automatically determined plot range in the x-direction is more than this,
+//     make this the range of the x axis.  Defaults to 1.  Do NOT make this 0.
+//
+//   minautoyrange : float
+//     Like minautoxrange, but for y
+//
+//   nozoomdocsdtring : bool
+//     Make this "true" to suppress the "Shift+LMB to zoom" text
+//
+//   zoommode : string
+//     One of "full", "default", or "manual".  If "full", the plot will initially be scaled
+//     to fit all the points.  If "default", the plot will be scaled to the limits given below
+//     in defaultlimits.  Don't make this "manual", I'm not sure what that would do.
+//
+//   defaultlimits : 4-element array of floats or null
+//     minx, maxx, miny, maxy default limits to which the plot will zoom
+//     if you tell it to zoom to the default, and which the plot will be
+//     drawn at initially if zoommode is "default".  If any element of the
+//     array is null, that limit will be determined automatically to fit all
+//     the points.  One use case of this is if you want several plots aligned
+//     vertically to share the same xaxis.  In that case, for all plots, you
+//     would set defaultlimits = [ xmin, xmax, null, null ].  The nulls mean
+//     that each plot has an automatically determined default vertical scale.
+//
+// ACESSIBLE PROPERTIES
+// ====================
+//    topdiv : document element
+//      This is the top-level div holding the plot and its associated falderal.
+//      This is the thing you pass to elem.appendChild() in order to add the
+//      svg plot to your document as a child of elem.
+//
+//    buttonbox : document element (div)
+//      This is the div that has the buttons.  You can add buttons (or whatever) here if you want.
+//
+//    docbox : document element (div)
+//      This is the div on the top row that has documentation text.
+//
+//    div : docuemnt element (div)
+//      The div that has the actual svg plot.  Treat this as read only.
+//
+//    svg : document element (svg)
+//      The svg element.  Treat this as read only.  Gets regenerated/replaced a lot.
+//      You can extract this if e.g. you want to save the plot somewhere.
 
 
 SVGPlot.Plot = function( inparams = {} )
 {
-    this.params = { "name": "svgplot",      // Must be unique for each svg plot on the same page
-                    "divid": "svgplotdiv",
-                    "svgid": "svgplotsvg",
+    this.params = { "name": null,
+                    "divid": null,
+                    "svgid": null,
                     "showerrbar": true,
                     "title": null,
                     "xtitle": null,
@@ -150,13 +346,19 @@ SVGPlot.Plot = function( inparams = {} )
                     "minautoxrange": 1.,
                     "minautoyrange": 1.,
                     "equalaspect": false,
-                    "nozoomdocstring": false,    // Make this "true" to suppress the "Shift+LMB to zoom" text
-                    "zoommode": "full",          // "full" (show all), "default", or "manual"
-                    "defaultlimits": []          // minx, maxx, miny, maxy
-                 };
+                    "nozoomdocstring": false,
+                    "zoommode": "full",
+                    "defaultlimits": []
+                  };
     Object.assign( this.params, inparams );
 
-    this.name = this.params.name.replace( " ", "_" );
+    if ( this.params.name == null ) {
+        this.name = "svgplot-" + SVGPlot.numplots;
+        SVGPlot.numplots += 1;
+    } else {
+        this.name = this.params.name;
+    }
+    this.name = this.name.replace( /\s/gi, "_" );
     this.topdiv = document.createElement( "div" );
     this.topdiv.setAttribute( "class", "svgplottopdiv" );
 
@@ -194,15 +396,12 @@ SVGPlot.Plot = function( inparams = {} )
 
     this.div = document.createElement( "div" );
     this.div.setAttribute( "class", "svgplotdiv" );
+    if ( this.params.divid == null ) this.params.divid = "svgplotdiv-" + this.name;
     this.div.setAttribute( "id", this.params.divid );
     this.topdiv.appendChild( this.div );
 
     var ns = "http://www.w3.org/2000/svg";
-    this.svg = document.createElementNS( ns, "svg" );
-    // I haven't figured out how the hell to get the xmlns attribute in there.
-    // Firefox yells at me if I try setAttributeNS, and it doesn't do anything
-    // if I do setAttribute
-    this.svg.setAttributeNS( 'http://www.w3.org/2000/xmlns/', "xmlns", ns );
+    this.svg = SVGPlot.svg();
     this.svg.addEventListener( "mousedown", this.downcallback );
     this.svg.addEventListener( "click", this.clickcallback );
     this.div.appendChild( this.svg );
@@ -550,19 +749,19 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
 
     var svg = this.svg
 
-    // This calculation is still returnin gsomething too wide, and I don't know why.
+    // This calculation is still returning something too wide, and I don't know why.
     // I fixed it by adding "width 100%" to the div (which has position: relative).
     var divstyle = window.getComputedStyle( this.div );
     var fullwidstr = divstyle.getPropertyValue( "width" );
     var fullwid = parseFloat( fullwidstr );
     var blwstr = divstyle.getPropertyValue( "border-left-width" )
-    var blw = parseFloat( blwstr  );
+    var blw = parseFloat( blwstr );
     var brwstr = divstyle.getPropertyValue( "border-right-width" )
-    var brw = parseFloat( brwstr  );
+    var brw = parseFloat( brwstr );
     var plwstr = divstyle.getPropertyValue( "padding-left" )
-    var plw = parseFloat( plwstr  );
+    var plw = parseFloat( plwstr );
     var prwstr = divstyle.getPropertyValue( "padding-right" )
-    var prw = parseFloat( prwstr  );
+    var prw = parseFloat( prwstr );
     var wid = fullwid - blw - brw - plw - prw;
     // console.log( "Div width is " + fullwid + " - " + blw + " - " + brw + " - " + plw + " - " + prw + " = " + wid );
     if ( width == null ) width = wid;
@@ -571,6 +770,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     this.div.appendChild( this.svg );
     svg.setAttribute( "class", "svgplotsvg" );
     svg.setAttribute( "viewBox", "0 0 " + this.params.width + " " + this.params.height );
+    if ( this.params.svgid == null ) this.params.svgid = "svgplotsvg-" + this.name;
     svg.setAttribute( "id", this.params.svgid );
 
     // Markers
@@ -580,7 +780,6 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     for ( var i = 0 ; i < this.datasets.length ; ++i )
     {
         if ( this.datasets[i].marker != null ) {
-            this.datasets[i].marker.setAttribute( "id", this.params.svgid + "-dataset" + i + "marker" );
             defs.appendChild( this.datasets[i].marker );
         }
     }
@@ -591,7 +790,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var style = document.createElementNS( ns, "style" );
     svg.appendChild( style );
 
-    var styletext = ".svgplotborderfill-" + this.name + " { stroke: none; fill: " + this.params.borderfill + "; }\n";
+    var styletext = ".svgplotborderfill-" + this.name + " { fill: " + this.params.borderfill + "; }\n";
 
     styletext += ".svgplotborderstroke-" + this.name + " { fill: none; stroke: " + this.params.bordercolor +
         "; stroke-width: " + this.params.borderwid;
@@ -625,11 +824,12 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
         + this.params.gridwid + "; }\n";
 
     for ( var i in this.datasets ) {
-        styletext += ".dataset" + i + "-" + this.name + " { stroke:" + this.datasets[i].color + "; ";
-        styletext += "stroke-width: " + this.datasets[i].linewid + "; ";
+        styletext += "." + this.datasets[i].name + " ";
+        styletext += "{ stroke:" + this.datasets[i].color + "; ";
+        styletext += "  stroke-width: " + this.datasets[i].linewid + "; ";
         if ( this.datasets[i].dash != null )
-            styletext += "; stroke-dasharray: " + this.datasets[i].dash.join() + "; ";
-        styletext += "fill: none; }\n";
+            styletext += "   stroke-dasharray: " + this.datasets[i].dash.join() + "; ";
+        styletext += "   fill: none; }\n";
 
         styletext += ".errorbar" + i + "-" + this.name + " { stroke: " + this.datasets[i].color + "; ";
         styletext += "stroke-width: " + this.datasets[i].errbarwid + "; ";
@@ -964,24 +1164,26 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             + leftedge.toFixed(2) +") view-box"
         if ( dataset.linewid > 0 ) {
             var polyline = document.createElementNS( ns, "polyline" );
-            polyline.setAttribute( "class", "dataset" + j + "-" + this.name );
-            polyline.setAttribute( "points", points )
+            // polyline.setAttribute( "class", "dataset" + j + "-" + this.name );
+            polyline.setAttribute( "class", dataset.name );
+            polyline.setAttribute( "points", points );
             polyline.setAttribute( "clip-path", clippath );
             if ( dataset.marker != null ) {
-                polyline.setAttribute( "marker-start", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
-                polyline.setAttribute( "marker-mid", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
-                polyline.setAttribute( "marker-end", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+                polyline.setAttribute( "marker-start", "url(#" + dataset.marker.id + ")" );
+                polyline.setAttribute( "marker-mid", "url(#" + dataset.marker.id + ")" );
+                polyline.setAttribute( "marker-end", "url(#" + dataset.marker.id +")" );
             }
             svg.appendChild( polyline );
         } else if ( dataset.marker != null ) {
             for ( let i in xpxes ) {
                 var polyline = document.createElementNS( ns, "polyline" );
-                polyline.setAttribute( "class", "dataset" + j + "-" + this.name );
+                // polyline.setAttribute( "class", "dataset" + j + "-" + this.name );
+                polyline.setAttribute( "class", dataset.name );
                 polyline.setAttribute( "points", "" + xpxes[i] + "," + ypxes[i] );
                 polyline.setAttribute( "clip-path", clippath );
-                polyline.setAttribute( "marker-start", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
-                polyline.setAttribute( "marker-mid", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
-                polyline.setAttribute( "marker-end", "url(#" + this.params.svgid + "-dataset" + j + "marker)" );
+                polyline.setAttribute( "marker-start", "url(#" + dataset.marker.id + ")" );
+                polyline.setAttribute( "marker-mid", "url(#" + dataset.marker.id + ")" );
+                polyline.setAttribute( "marker-end", "url(#" + dataset.marker.id + ")" );
                 svg.appendChild( polyline );
             }
         }
@@ -1307,23 +1509,86 @@ SVGPlot.Plot.prototype.mouseup = function( event )
 // **********************************************************************
 // **********************************************************************
 // **********************************************************************
-// SVGPlot.Dataset encapsulates one data set
+// SVGPlot.Dataset encapsulates one data set.
 //
-// Allowed values for marker:
-//    dot  (filled circle)
-//    circle (open circle)
-//    square
-//    filledsquare
-//    diamond
-//    filleddiamond
-//    uptriangle
-//    filleduptriangle
-//    downtriangle
-//    filleddowntriangle
+// Make one or more of these, and pass them to the addDataset method of
+// a SVGPlot.Plot.
+//
+// CONSTRUCTOR PARAMETERS
+// ======================
+//    name : string
+//       Name of the data set.  Must be unique for every data set on the same page!
+//       Defaults to "svgplot-dataset-{n}", where n is an incrementing integer.
+//       (Note: you probably never want to specify this, as it's safer that way.)
+//
+//    caption : string
+//       A very brief description of the dataset suitable for use in a legend.
+//       If null, says that the dataset shouldn't be included in any legend.
+//
+//    x : list of float
+//       x values
+//
+//    y : list of float
+//       y values.  Must have same length as x.
+//
+//    dx : list of float
+//       x error bar sizes.  Must either be empty (if there are no x error bars),
+//       or have the same length as x.
+//
+//    dy : list of float
+//       y error bar sizes.  Must either be empty (if there are no y error bars),
+//       or have the same length as x.
+//
+//    pointnames : list of string
+//       Names of the points, in case you feel the need to give a
+//       diferent name to each point on your plot..  Must either be
+//       empty, or have the same lenght as x.
+//
+//    linewid : int (float?)
+//       Width of the line joining the points.  Make this 0 to draw no line.  Default 4.
+//
+//    errorbarwid : int (float?)
+//       Width of the error bar lines.  Default 2.
+//
+//    color : color string
+//       Color of the line.  Defaults to "#cc0000"
+//
+//    highlightcolor : color string
+//       Color of the thing that highlights selected points.  Defautls to "#00cc00"
+//
+//    dash : ?
+//       Line dash pattern.  Default null.  (TODO: figure out how this works.)
+//
+//    marker : string, default "dot"
+//       Marker.  One of:
+//          dot  (filled circle)
+//          circle (open circle)
+//          square
+//          filledsquare
+//          diamond
+//          filleddiamond
+//          uptriangle
+//          filleduptriangle
+//          downtriangle
+//          filleddowntriangle
+//       (I think!) make this null to draw no markers.
+//
+//    markercolor : color string
+//       Color of the markers.  Defaults to be the same as color.
+//
+//    markersize : int (float)
+//       Size of the markers
+//
+//    markerstrokewid : int (float)
+//       Stroke width of the border of open markers.  Default 2
+//
+//    clickselect : bool, default true
+//       Can you click on points to select them?
 
 SVGPlot.Dataset = function( inparams = {} )
 {
     var params = { "name": null,
+                   "caption": null,
                    "x": [],
                    "y": [],
                    "dx": [],
@@ -1347,6 +1612,11 @@ SVGPlot.Dataset = function( inparams = {} )
     this.ordinal = 0;
     this.plot = null;
     this.name = params.name;
+    if ( this.name == null ) {
+        this.name = "svgplot-dataset-" + SVGPlot.numdatasets;
+        SVGPlot.numdatasets +=1 ;
+    }
+    this.caption = params.caption;
     this.clickselect = params.clickselect;
     this.highlightcolor = params.highlightcolor;
     this.markersize = params.markersize;
@@ -1361,8 +1631,10 @@ SVGPlot.Dataset = function( inparams = {} )
     }
     this.replaceData( params.x, params.y, params.dx, params.dy, params.pointnames );
 
+    this.markercolor = params.markercolor;
     this.marker = SVGPlot.Dataset.markerCode( params.marker, params.markercolor,
                                               params.markersize, params.markerstrokewid );
+    this.marker.setAttribute( "id", "dataset-" + this.name + "-marker" );
 
     this.scalex = 1.;
     this.offx = 0.;
