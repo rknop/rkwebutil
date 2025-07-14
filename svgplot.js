@@ -301,7 +301,9 @@ SVGPlot.generateTickValues = function( min, max, sp )
 //    svg : document element (svg)
 //      The svg element.  Treat this as read only.  Gets regenerated/replaced a lot.
 //      You can extract this if e.g. you want to save the plot somewhere.
-
+//
+//    xmin, xmax, ymin, ymax : float
+//      Current plot limits.  If you set them, it will cause the plot to redraw.
 
 SVGPlot.Plot = function( inparams = {} )
 {
@@ -660,6 +662,65 @@ SVGPlot.Plot.prototype.elemSize = function( elem )
 
 // **********************************************************************
 
+SVGPlot.Plot.prototype.calc_autoscale = function()
+{
+    let xmin = 1e30;
+    let xmax = -1e30;
+    let ymin = 1e30;
+    let ymax = -1e30;
+    let npoints = 0;
+    for ( var dataset of this.datasets ) {
+        for ( var i in dataset._x ) {
+            npoints += 1;
+            let x = dataset._x[i] * dataset.scalex + dataset.offx;
+            let y = dataset._y[i] * dataset.scaley + dataset.offy
+            if ( x < xmin ) xmin = x;
+            if ( x > xmax ) xmax = x;
+            if ( y < ymin ) ymin = y;
+            if ( y > ymax ) ymax = y;
+        }
+    }
+    if ( npoints == 0 ) {
+        xmin = -this.params.minautoxrange/2;
+        xmax =  this.params.minautoxrange/2;
+        ymin = -this.params.minautoyrange/2;
+        ymax =  this.params.minautoyrange/2;
+    }
+    else {
+        if ( this.params.nosuppresszerox && ( xmin > 0 ) ) xmin = 0;
+        if ( this.params.nosuppresszeroy && ( ymin > 0 ) ) ymin = 0;
+        let xmid = ( xmax + xmin ) / 2
+        let ymid = ( ymax + ymin ) / 2;
+        let dx = ( xmax-xmin ) * 1.1;
+        if ( this.params.minautoxrange != null && this.params.minautoxrange > dx )
+            dx = this.params.minautoxrange;
+        let dy = ( ymax-ymin ) * 1.1;
+        if ( this.params.minautoyrange != null && this.params.minautoyrange > dy )
+            dy = this.params.minautoyrange;
+        if ( dx == 0 ) dx = 1.;
+        if ( dy == 0 ) dy = 1.;
+        xmin = xmid - dx/2;
+        xmax = xmid + dx/2;
+        ymin = ymid - dy/2;
+        ymax = ymid + dy/2;
+    }
+
+    if ( this.params.flipx ) {
+        let tmp = xmax;
+        xmax = xmin;
+        xmin = tmp;
+    }
+    if ( this.params.flipy ) {
+        let tmp = ymax;
+        ymax = ymin;
+        ymin = tmp;
+    }
+
+    return { "xmin": xmin, "xmax": xmax, "ymin": ymin, "ymax": ymax };
+}
+
+// **********************************************************************
+
 SVGPlot.Plot.prototype.redraw = function( width=null )
 {
     let self = this;
@@ -695,68 +756,18 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     }
 
     if ( mustcalcautoscale ) {
-        let xmin = 1e30;
-        let xmax = -1e30;
-        let ymin = 1e30;
-        let ymax = -1e30;
-        let npoints = 0;
-        for ( var dataset of this.datasets ) {
-            for ( var i in dataset._x ) {
-                npoints += 1;
-                let x = dataset._x[i] * dataset.scalex + dataset.offx;
-                let y = dataset._y[i] * dataset.scaley + dataset.offy
-                if ( x < xmin ) xmin = x;
-                if ( x > xmax ) xmax = x;
-                if ( y < ymin ) ymin = y;
-                if ( y > ymax ) ymax = y;
-            }
-        }
-        if ( npoints == 0 ) {
-            xmin = -this.params.minautoxrange/2;
-            xmax =  this.params.minautoxrange/2;
-            ymin = -this.params.minautoyrange/2;
-            ymax =  this.params.minautoyrange/2;
-        }
-        else {
-            if ( this.params.nosuppresszerox && ( xmin > 0 ) ) xmin = 0;
-            if ( this.params.nosuppresszeroy && ( ymin > 0 ) ) ymin = 0;
-            let xmid = ( xmax + xmin ) / 2
-            let ymid = ( ymax + ymin ) / 2;
-            let dx = ( xmax-xmin ) * 1.1;
-            if ( this.params.minautoxrange != null && this.params.minautoxrange > dx )
-                dx = this.params.minautoxrange;
-            let dy = ( ymax-ymin ) * 1.1;
-            if ( this.params.minautoyrange != null && this.params.minautoyrange > dy )
-                dy = this.params.minautoyrange;
-            if ( dx == 0 ) dx = 1.;
-            if ( dy == 0 ) dy = 1.;
-            xmin = xmid - dx/2;
-            xmax = xmid + dx/2;
-            ymin = ymid - dy/2;
-            ymax = ymid + dy/2;
-        }
-
-        if ( this.params.flipx ) {
-            let tmp = xmax;
-            xmax = xmin;
-            xmin = tmp;
-        }
-        if ( this.params.flipy ) {
-            let tmp = ymax;
-            ymax = ymin;
-            ymin = tmp;
-        }
+        let autorange = this.calc_autoscale()
 
         if ( this._zoommode == "default" ) {
-            if ( this._minx == null ) this._minx = xmin;
-            if ( this._maxx == null ) this._maxx = xmax;
-            if ( this._miny == null ) this._miny = ymin;
-            if ( this._maxy == null ) this._maxy = ymax;
+            if ( this._minx == null ) this._minx = autorange.xmin;
+            if ( this._maxx == null ) this._maxx = autorange.xmax;
+            if ( this._miny == null ) this._miny = autorange.ymin;
+            if ( this._maxy == null ) this._maxy = autorange.ymax;
         } else {
-            this._minx = xmin;
-            this._maxx = xmax;
-            this._miny = ymin;
-            this._maxy = ymax;
+            this._minx = autorange.xmin;
+            this._maxx = autorange.xmax;
+            this._miny = autorange.ymin;
+            this._maxy = autorange.ymax;
         }
     }
 
@@ -1156,7 +1167,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     // Datasets
 
     for ( var j in this.datasets ) {
-        dataset = this.datasets[j];
+        let dataset = this.datasets[j];
         var points = "";
         let xpxes = [];
         let ypxes = [];
