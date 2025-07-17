@@ -466,12 +466,12 @@ def getpasswordresetlink():
         if not flask.request.is_json:
             return "/auth/getpasswordresetlink was expecting application/json", 500
 
-        if 'username' in flask.request.json:
+        if 'username' in flask.request.json and flask.request.json['username']:
             username = flask.request.json['username']
             them = get_user_by_username( username )
             if them is None:
                 return f"username {username} not known", 500
-        elif 'email' in flask.request.json:
+        elif 'email' in flask.request.json and flask.request.json['email']:
             email = flask.request.json['email']
             them = get_users_by_email( email )
             if them is None:
