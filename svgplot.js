@@ -773,24 +773,38 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
 
     var svg = this.svg
 
-    // This calculation is still returning something too wide, and I don't know why.
-    // I fixed it by adding "width 100%" to the div (which has position: relative).
-    var divstyle = window.getComputedStyle( this.div );
-    var fullwidstr = divstyle.getPropertyValue( "width" );
-    var fullwid = parseFloat( fullwidstr );
-    var blwstr = divstyle.getPropertyValue( "border-left-width" )
-    var blw = parseFloat( blwstr );
-    var brwstr = divstyle.getPropertyValue( "border-right-width" )
-    var brw = parseFloat( brwstr );
-    var plwstr = divstyle.getPropertyValue( "padding-left" )
-    var plw = parseFloat( plwstr );
-    var prwstr = divstyle.getPropertyValue( "padding-right" )
-    var prw = parseFloat( prwstr );
-    var wid = fullwid - blw - brw - plw - prw;
-    // console.log( "Div width is " + fullwid + " - " + blw + " - " + brw + " - " + plw + " - " + prw + " = " + wid );
-    if ( width == null ) width = wid;
+    var height = null;
+    if ( width == null ) {
+        var divstyle = window.getComputedStyle( this.div );
+
+        var fullwid = parseFloat( divstyle.getPropertyValue( "width" ) );
+        var blw = parseFloat( divstyle.getPropertyValue( "border-left-width" ) );
+        var brw = parseFloat( divstyle.getPropertyValue( "border-right-width" ) );
+        var plw = parseFloat( divstyle.getPropertyValue( "padding-left" ) );
+        var prw = parseFloat( divstyle.getPropertyValue( "padding-right" ) );
+        var wid = fullwid - blw - brw - plw - prw;
+
+        var fullhei = parseFloat( divstyle.getPropertyValue( "height" ) );
+        var btw = parseFloat( divstyle.getPropertyValue( "border-top-width" ) );
+        var bbw = parseFloat( divstyle.getPropertyValue( "border-bottom-width" ) );
+        var ptw = parseFloat( divstyle.getPropertyValue( "padding-top" ) );
+        var pbw = parseFloat( divstyle.getPropertyValue( "padding-bottom" ) );
+        var hei = fullhei - btw - bbw - ptw -pbw;
+
+        var heifromwid = Math.round( wid * this.params.height / this.params.width );
+        if ( heifromwid > hei ) {
+            height = hei;
+            width = Math.round( height * this.params.width / this.params.height );
+        } else {
+            width = wid;
+            hei = heifromwid;
+        }
+    } else {
+        height = Math.round( width * this.params.height / this.params.width );
+    }
+
     this.svg.setAttribute( "width", width );
-    this.svg.setAttribute( "height", Math.round( width * this.params.height / this.params.width ) );
+    this.svg.setAttribute( "height", height );
     this.div.appendChild( this.svg );
     svg.setAttribute( "class", "svgplotsvg" );
     svg.setAttribute( "viewBox", "0 0 " + this.params.width + " " + this.params.height );
@@ -910,7 +924,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var xlabelems = [];
     for ( var i in xlabels ) {
         let text = document.createElementNS( ns, "text" );
-        text.setAttribute( "class", "svgplotticklabel=" + this.name );
+        text.setAttribute( "class", "svgplotticklabel-" + this.name );
         text.appendChild( document.createTextNode( xlabels[i] ) );
         svg.appendChild( text );
         xlabelems.push( text );
@@ -953,7 +967,7 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     var plotwidth = rightedge - leftedge;
     var plotheight = bottomedge - topedge;
 
-    // Now that we know how big the thign is on the screen, we have to
+    // Now that we know how big the thing is on the screen, we have to
     // re-evaluate plot min and max *again* in the case of equalaspect.
     // This potentially means re-generating tick labels!  Bah!
 
