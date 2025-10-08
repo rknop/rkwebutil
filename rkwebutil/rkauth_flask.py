@@ -245,7 +245,7 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
     if ( ( userid is not None ) + ( username is not None ) + ( email is not None ) ) != 1:
         raise RuntimeError( "Specify exactly one of {userid,username,email}" )
 
-    q = "Selectx u.*"
+    q = "Select u.*"
     if RKAuthConfig.usegroups:
         q += ",array_agg(g.name) AS groups"
     q += f" FROM {RKAuthConfig.authuser_table} u "

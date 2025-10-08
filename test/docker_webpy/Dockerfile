@@ -50,8 +50,8 @@ FROM base AS webserver
 COPY --from=build /venv/ /venv/
 ENV PATH=/venv/bin:$PATH
 
-COPY test/docker_webpy/key.pem /usr/src/key.pem
-COPY test/docker_webpy/cert.pem /usr/src/cert.pem
+COPY test/docker_flask/key.pem /usr/src/key.pem
+COPY test/docker_flask/cert.pem /usr/src/cert.pem
 
 # Set up apache
 RUN ln -s ../mods-available/socache_shmcb.load /etc/apache2/mods-enabled/socache_shmcb.load
@@ -68,6 +68,9 @@ RUN patch /etc/apache2/mods-available/wsgi.conf /usr/src/wsgi.conf.patch
 RUN chmod -R a+rwx /var/www/html
 RUN chmod -R a+rwx /var/log/apache2
 RUN chmod -R a+rwx /var/run/apache2
+
+COPY test/docker_webpy/ap.css test/docker_webpy/ap.js test/docker_webpy/ap.py test/docker_webpy/ap_start.js /var/www/html/
+RUN cp -p /venv/lib/python3.11/site-packages/rkwebutil/static/* /var/www/html/
 
 RUN apachectl start
 

@@ -15,7 +15,7 @@ _dir = pathlib.Path(__file__).parent
 if str(_dir) not in sys.path:
     sys.path.append( str(_dir) )
 
-import rkauth_webpy
+from rkwebutil import rkauth_webpy
 
 # In reality, you don't want to hardcode passwords, and you want to read this
 #   from some kind of config.  This is here for the automated tests.

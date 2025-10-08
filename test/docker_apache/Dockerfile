@@ -1,4 +1,4 @@
-# This dockerfile must be run from the parent directory of the Dockerfile's directory
+# This dockerfile must be run from the top of the rkwebutil checkout
 
 FROM rknop/devuan-daedalus-rknop AS base
 LABEL maintainer="Rob Knop <rknop@pobox.com>"
@@ -52,8 +52,8 @@ FROM base AS webserver
 COPY --from=build /venv/ /venv/
 ENV PATH=/venv/bin:$PATH
 
-COPY test/docker_apache/key.pem /usr/src/key.pem
-COPY test/docker_apache/cert.pem /usr/src/cert.pem
+COPY test/docker_flask/key.pem /usr/src/key.pem
+COPY test/docker_flask/cert.pem /usr/src/cert.pem
 
 # Set up apache
 RUN ln -s ../mods-available/socache_shmcb.load /etc/apache2/mods-enabled/socache_shmcb.load
@@ -72,5 +72,13 @@ RUN chmod a+rwx /sessions
 RUN chmod -R a+rwx /var/www/html
 RUN chmod -R a+rwx /var/log/apache2
 RUN chmod -R a+rwx /var/run/apache2
+
+RUN mkdir /flask
+RUN chmod a+rx /flask
+COPY test/docker_apache/server.py /flask/
+COPY test/docker_flask/ap /flask/ap
+RUN ln -s /flask/ap/static /flask/static
+RUN ln -s /flask/ap/tempaltes /flask/templates
+RUN cp -p /venv/lib/python3.11/site-packages/rkwebutil/static/* /flask/static/
 
 ENTRYPOINT [ "apachectl", "-D", "FOREGROUND", "-D", "APACHE_CONFDIR=/etc/apache2" ]

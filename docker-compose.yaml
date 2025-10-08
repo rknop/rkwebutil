@@ -1,5 +1,9 @@
 # This is the docker compose file used for tests
 
+# TODO : right now we have to build all the docker images every time
+#   because the code is baked into the images with pip install -e .
+#   Think about that.
+
 services:
   mailhog:
     image: mailhog/mailhog:latest
