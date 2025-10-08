@@ -153,6 +153,7 @@ if str(_dir) not in sys.path:
 
 bp = flask.Blueprint( 'auth', __name__, url_prefix='/auth' )
 
+
 class RKAuthConfig:
     """Global rkauth config.
 
@@ -225,6 +226,7 @@ class RKAuthConfig:
         if not re.search( '^[a-zA-Z0-9_]+$', cls.passwordlink_table ):
             raise ValueError( f"Invalid passwordlink table name {cls.passwordlink_table}" )
 
+
 @contextlib.contextmanager
 def _con_and_cursor():
     dbcon = psycopg2.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
@@ -243,7 +245,7 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
     if ( ( userid is not None ) + ( username is not None ) + ( email is not None ) ) != 1:
         raise RuntimeError( "Specify exactly one of {userid,username,email}" )
 
-    q = f"SELECT u.*"
+    q = "Selectx u.*"
     if RKAuthConfig.usegroups:
         q += ",array_agg(g.name) AS groups"
     q += f" FROM {RKAuthConfig.authuser_table} u "
@@ -281,18 +283,22 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
         else:
             return rows[0]
 
+
 def get_user_by_uuid( userid ):
     return _get_user( userid=userid )
+
 
 def get_user_by_username( username ):
     return _get_user( username=username )
 
+
 def get_users_by_email( email ):
     return _get_user( email=email, many_ok=True )
 
+
 def create_password_link( useruuid ):
     PasswordLink = namedtuple( 'passwordlink', [ 'id', 'userid', 'expires' ] )
-    expires = datetime.datetime.now( datetime.timezone.utc ) + datetime.timedelta( hours=1 )
+    expires = datetime.datetime.now( datetime.UTC ) + datetime.timedelta( hours=1 )
     pwlink = PasswordLink( uuid.uuid4(), useruuid, expires )
 
     with _con_and_cursor() as con_and_cursor:
@@ -304,6 +310,7 @@ def create_password_link( useruuid ):
 
     return pwlink
 
+
 def get_password_link( linkid ):
     with _con_and_cursor() as con_and_cursor:
         cursor = con_and_cursor[1]
@@ -312,7 +319,7 @@ def get_password_link( linkid ):
         if len( rows ) == 0:
             return None
         elif len( rows ) > 1:
-            raise RuntimeError( f"Multiple password links with id {linkdi}, this should never happen" )
+            raise RuntimeError( f"Multiple password links with id {linkid}, this should never happen" )
 
         return rows[0]
 
@@ -349,7 +356,7 @@ def getchallenge():
             return "Error, /auth/getchallenge was expecting application/json", 500
         data = flask.request.json
 
-        if not 'username' in data:
+        if 'username' not in data:
             return "Error, no username sent to server", 500
         user = get_user_by_username( data['username'] )
         if user is None:
@@ -415,12 +422,12 @@ def respondchallenge():
     try:
         if not flask.request.is_json:
             return "auth/respondchallenge was expecting application/json", 500
-        if ( ( not 'username' in flask.request.json ) or
-             ( not 'response' in flask.request.json ) ):
+        if ( ( 'username' not in flask.request.json ) or
+             ( 'response' not in flask.request.json ) ):
             return ( "Login error: username or challenge response missing "
                      "(you probably can't fix this, contact code maintainer)" ), 500
         if flask.request.json['username'] != flask.session['username']:
-            return  ( f"Username {fask.request.json['username']} "
+            return  ( f"Username {flask.request.json['username']} "
                       f"didn't match session username {flask.session['username']}; "
                       f"try logging out and logging back in." ), 500
         if flask.session["authuuid"] != flask.request.json['response']:
@@ -537,6 +544,7 @@ def getpasswordresetlink():
         flask.current_app.logger.exception( "Exception in getpasswordresetlink" )
         return f"Exception in getpasswordresetlink: {str(e)}", 500
 
+
 @bp.route( '/resetpassword', methods=['GET'] )
 def resetpassword():
     """Prompt user to reset password.
@@ -549,7 +557,7 @@ def resetpassword():
     """
     response = "<!DOCTYPE html>\n"
     response += "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
-    response += f"<title>Password Reset</title>\n"
+    response += "<title>Password Reset</title>\n"
 
     webapdirurl = str( pathlib.Path( flask.request.path ).parent.parent )
     if webapdirurl[-1] != '/':
@@ -557,10 +565,10 @@ def resetpassword():
     flask.current_app.logger.debug( f"In ResetPassword, webapdirurl is {webapdirurl}\n" )
     response += "<script src=\"" + webapdirurl + "static/resetpasswd_start.js\" type=\"module\"></script>\n"
     response += "</head>\n<body>\n"
-    response += f"<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n";
+    response += "<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n"
 
     try:
-        if not 'uuid' in flask.request.args:
+        if 'uuid' not in flask.request.args:
             response += "<p>Malformed password reset URL.</p>\n</body></html>"
             return flask.make_response( response )
 
@@ -635,7 +643,7 @@ def changepassword():
         if not flask.request.is_json:
             return "Error, /auth/changepassword was expecting application/json", 500
         for key in [ "passwordlinkid", "publickey", "privatekey", "salt", "iv" ]:
-            if not key in flask.request.json:
+            if key not in flask.request.json:
                 return f"Error, call to changepassword without {key}", 500
 
         pwlink = get_password_link( flask.request.json['passwordlinkid'] )
@@ -695,7 +703,7 @@ def isauth():
                                 'usergroups': flask.session["usergroups"],
                                } )
     else:
-        return flask.jsonify( { 'status': False } );
+        return flask.jsonify( { 'status': False } )
 
 
 @bp.route( '/logout', methods=['GET','POST'] )

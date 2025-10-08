@@ -15,6 +15,7 @@ from Crypto.Hash import SHA256
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
 
+
 class rkAuthClient:
     def __init__( self, url, username, password, verify=True ):
         """Create a client to connect to a server that uses rkauth.
@@ -102,7 +103,7 @@ class rkAuthClient:
                 privkey = RSA.import_key( privkeybytes )
                 rsacipher = PKCS1_OAEP.new( privkey, hashAlgo=SHA256 )
                 decrypted_challenge = rsacipher.decrypt( challenge ).decode( 'utf-8' )
-            except Exception as e:
+            except Exception:
                 raise RuntimeError( "Failed to log in, probably incorrect password" )
 
 

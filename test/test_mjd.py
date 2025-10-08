@@ -6,17 +6,12 @@
 
 import re
 import time
-import json
-import requests
 import pytest
 
-import selenium
-from selenium.common.exceptions import NoSuchElementException
 import selenium.webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.remote.webelement import WebElement
+
 
 class TestMJD:
     url = "https://flask:8080/"
@@ -89,4 +84,3 @@ class TestMJD:
             dateinput.send_keys( datestr )
             datebutton.click()
             assert float( mjdinput.get_attribute( 'value' ) ) == pytest.approx( mjd, abs=1e-6 )
-

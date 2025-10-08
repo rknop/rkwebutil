@@ -7,14 +7,13 @@
 #
 # rkwebutil is free software, available under the BSD 3-clause license (see LICENSE)
 
-import sys
-import os
 import logging
 import pathlib
 import types
 import copy
 import yaml
 import traceback
+
 
 class Config:
     """Interface for yaml config file.
@@ -136,12 +135,12 @@ class Config:
         if configfile is None:
             if Config._default is None:
                 if Config._default_default is None:
-                    raise RuntimeError( f'No default config defined yet; run Config.init(configfile)' )
+                    raise RuntimeError( 'No default config defined yet; run Config.init(configfile)' )
                 Config._default = Config._default_default
             configfile = Config._default
 
         configfile = str( pathlib.Path(configfile).resolve() )
-                
+
         if reread or ( configfile not in Config._configs ):
             Config._configs[configfile] = Config( configfile, logger=logger, dirmap=dirmap )
             if Config._default is None:
@@ -149,7 +148,7 @@ class Config:
 
         if setdefault:
             Config._default = configfile
-                
+
         return Config._configs[configfile]
 
     @staticmethod
@@ -300,7 +299,7 @@ class Config:
             else:
                 try:
                     return self.value( ".".join(fields[1:]), struct[ifield] )
-                except Exception as e:
+                except Exception:
                     traceback.print_exc()
                     raise ValueError( f'Error getting list element {ifield}' )
         elif isinstance( struct, dict ):
@@ -311,7 +310,7 @@ class Config:
             else:
                 try:
                     return self.value( ".".join(fields[1:]), struct[curfield] )
-                except Exception as e:
+                except Exception:
                     traceback.print_exc()
                     raise ValueError( f'Error getting field {curfield}' )
         else:
@@ -431,8 +430,3 @@ class Config:
             return newdict
         else:
             return copy.deepcopy( right )
-
-
-
-if __name__ == "__main__":
-    main()

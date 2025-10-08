@@ -1,6 +1,7 @@
 import os
 import psycopg2
 
+
 def main():
     dbhost = os.getenv( 'DB_HOST' )
     dbname = os.getenv( 'DB_NAME' )
@@ -29,11 +30,11 @@ def main():
     # q = ( "INSERT INTO authuser(id,username,displayname,email) "
     #       "VALUES ('fdc718c3-2880-4dc5-b4af-59c19757b62d','browser_test','Test User','testuser@mailhog')" )
     # cursor.execute( q )
-    
+
     conn.commit()
+
 
 # ======================================================================
 
 if __name__ == "__main__":
     main()
-    

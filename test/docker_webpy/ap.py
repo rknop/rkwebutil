@@ -36,6 +36,7 @@ rkauth_webpy.RKAuthConfig.setdbparams(
         # webap_url = 'https://flask:8080/auth'
     )
 
+
 # ======================================================================
 
 class HandlerBase(object):
@@ -45,7 +46,7 @@ class HandlerBase(object):
     def GET( self, *args, **kwargs ):
         return self.do_the_things( *args, **kwargs )
 
-    def POST( self, *args, **kwags ):
+    def POST( self, *args, **kwargs ):
         return self.do_the_things( *args, **kwargs )
 
     def isauthenticated( self ):
@@ -57,7 +58,7 @@ class HandlerBase(object):
 
     def jsontop( self ):
         web.header( 'Content-Type', 'application/json' )
-        
+
     def htmltop( self ):
         web.header( 'Content-Type', 'text/html; charset="UTF-8"' )
         webapdirurl = str( pathlib.Path( web.ctx.homepath ).parent )
@@ -72,9 +73,10 @@ class HandlerBase(object):
         self.response += "</head>\n"
         self.response += "<h1>RKWebUtil Auth Test</h1>\n"
         self.response += "<div id=\"status-div\" name=\"status-div\"></div>\n"
-        
+
     def htmlbottom( self ):
         self.response += "</body>\n</html>\n"
+
 
 # ======================================================================
 # web.py handler classes
@@ -84,7 +86,8 @@ class FrontPage(HandlerBase):
         self.htmltop()
         if self.isauthenticated():
             self.response += "<h2>Logged in</h2>\n"
-            self.response += f"<p>You are logged in as {web.ctx.session.username} ({web.ctx.session.userdisplayname})</p>\n"
+            self.response += ( f"<p>You are logged in as {web.ctx.session.username} "
+                               f"({web.ctx.session.userdisplayname})</p>\n" )
         else:
             self.response += "<h2>Not Logged In</h2>\n"
             self.response += "<p>Log in to continue.</p>\n"
@@ -92,6 +95,7 @@ class FrontPage(HandlerBase):
         self.response += "</div>\n"
         self.htmlbottom()
         return self.response
+
 
 # ======================================================================
 # Define the web ap
@@ -109,13 +113,16 @@ initializer.update( rkauth_webpy.initializer )
 # Use something better than /tmp for sessions
 session = web.session.Session( app, web.session.DiskStore( "/tmp" ), initializer=initializer )
 
+
 def session_hook():
     global session
     web.ctx.session = session
 
+
 app.add_processor( web.loadhook( session_hook ) )
 
 application = app.wsgifunc()
+
 
 # ======================================================================
 # smoke test
@@ -125,6 +132,7 @@ def main():
     sys.stderr.write( "Running webapp.\n" )
     sys.stderr.flush()
     app.run()
+
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,7 @@
 import os
 import psycopg2
 
+
 def main():
     dbhost = os.getenv( 'DB_HOST' )
     dbname = os.getenv( 'DB_NAME' )
@@ -54,8 +55,8 @@ def main():
 
     conn.commit()
 
+
 # ======================================================================
 
 if __name__ == "__main__":
     main()
-

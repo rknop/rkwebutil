@@ -17,7 +17,7 @@
 # 2. Import the module as a submodule to your main webap, with
 #    "import rkauth_webpy" or something similar.
 #
-# 3. Configure the database, and configure email for password link sending.  
+# 3. Configure the database, and configure email for password link sending.
 #    After you've imported this file, call the setdbparams() class method of the
 #    RKAuthConfig class:
 #      rkauth_webpy.RKAuthConfig.setdbparams(
@@ -49,8 +49,8 @@
 #    initializer = { ... }
 #    initializer.update( rkauth_webpy.initializer )
 #    session = web.session.Session( app, web.session.DiskStore(...), initalizer=initializer )
-#    def session_hook(): web.ctx.session = session 
-#    app.add_processor( web.loadhook( session_hook ) ) 
+#    def session_hook(): web.ctx.session = session
+#    app.add_processor( web.loadhook( session_hook ) )
 #
 # In your webap, you can find out if the user has been authenticated by
 # accessing the session via web.ctx.session. Variables in the session:
@@ -101,6 +101,7 @@ from web import form
 import Crypto.PublicKey.RSA
 import Crypto.Cipher.PKCS1_OAEP
 import Crypto.Hash
+
 
 class RKAuthConfig:
     """Global rkauth config.
@@ -165,6 +166,7 @@ class RKAuthConfig:
         if not re.search( '^[a-zA-Z0-9_]+$', cls.passwordlink_table ):
             raise ValueError( f"Invalid passwordlink table name {cls.passwordlink_table}" )
 
+
 # ======================================================================
 # Utility functions that are the same as rkauth_flask.py, and so
 #  should probably moved to an external thing that's included...
@@ -212,11 +214,14 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
         else:
             return rows[0]
 
+
 def get_user_by_uuid( userid ):
     return _get_user( userid=userid )
 
+
 def get_user_by_username( username ):
     return _get_user( username=username )
+
 
 def get_users_by_email( email ):
     return _get_user( email=email, many_ok=True )
@@ -224,7 +229,7 @@ def get_users_by_email( email ):
 
 def create_password_link( useruuid ):
     PasswordLink = namedtuple( 'passwordlink', [ 'id', 'userid', 'expires' ] )
-    expires = datetime.datetime.now( datetime.timezone.utc ) + datetime.timedelta( hours=1 )
+    expires = datetime.datetime.now( datetime.UTC ) + datetime.timedelta( hours=1 )
     pwlink = PasswordLink( uuid.uuid4(), useruuid, expires )
 
     with _con_and_cursor() as con_and_cursor:
@@ -236,6 +241,7 @@ def create_password_link( useruuid ):
 
     return pwlink
 
+
 def get_password_link( linkid ):
     with _con_and_cursor() as con_and_cursor:
         cursor = con_and_cursor[1]
@@ -244,7 +250,7 @@ def get_password_link( linkid ):
         if len( rows ) == 0:
             return None
         elif len( rows ) > 1:
-            raise RuntimeError( f"Multiple password links with id {linkdi}, this should never happen" )
+            raise RuntimeError( f"Multiple password links with id {linkid}, this should never happen" )
 
         return rows[0]
 
@@ -256,7 +262,7 @@ def get_password_link( linkid ):
 class ErrorResponse(web.HTTPError):
     def __init__( self, text, content_type='text/plain; charset=utf-8' ):
         web.HTTPError.__init__( self, "500 Internal Server Error", { 'Content-Type': content_type }, text )
-        
+
 
 # ======================================================================
 
@@ -292,13 +298,14 @@ class HandlerBase:
                 mimetype = 'text/plain; charset=utf-8'
         else:
             raise RuntimeError( f"Invalid type {type(rval)} returned from do_the_things" )
-            
+
         if status == "200 OK":
             web.header( 'Content-Type', mimetype )
             return rval
         else:
             raise ErrorResponse( rval, mimetype )
-    
+
+
 # ======================================================================
 
 class GetAuthChallenge(HandlerBase):
@@ -309,7 +316,7 @@ class GetAuthChallenge(HandlerBase):
         try:
             web.ctx.session.authenticated = False
             inputdata = json.loads( web.data().decode(encoding="utf-8") )
-            if not 'username' in inputdata:
+            if 'username' not in inputdata:
                 return 'No username sent to server', 500
             user = get_user_by_username( inputdata['username'] )
             if user is None:
@@ -337,6 +344,7 @@ class GetAuthChallenge(HandlerBase):
             sys.stderr.write( f'{traceback.format_exc()}\n' )
             return f"Exception in getchallenge: {str(e)}", 500
 
+
 class RespondAuthChallenge(HandlerBase):
     def __init__( self ):
         super().__init__()
@@ -344,8 +352,8 @@ class RespondAuthChallenge(HandlerBase):
     def do_the_things( self ):
         try:
             inputdata = json.loads( web.data().decode(encoding="utf-8") )
-            if ( ( not 'username' in inputdata ) or
-                 ( not 'response' in inputdata ) ):
+            if ( ( 'username' not in inputdata ) or
+                 ( 'response' not in inputdata ) ):
                 return ( "Login error; username or challenge response missing "
                          "(you probably can't fix this, contact code maintainer)" ), 500
             if inputdata['username'] != web.ctx.session.username:
@@ -366,6 +374,7 @@ class RespondAuthChallenge(HandlerBase):
             sys.stderr.write( f'{traceback.format_exc()}\n' )
             # return { 'error': f'Exception in RespondAuthChallenge: {str(e)}' }
             return f"Exception in RespondAuthChallenge: {str(e)}", 500
+
 
 # ======================================================================
 
@@ -391,7 +400,7 @@ class GetPasswordResetLink(HandlerBase):
 
             if not isinstance( them, list ):
                 them = [ them ]
-            
+
             sentto = ""
             for user in them:
                 pwlink = create_password_link( user.id )
@@ -432,7 +441,7 @@ class GetPasswordResetLink(HandlerBase):
             sys.stderr.write( f'{traceback.format_exc()}\n' )
             return f"Exception in GetPasswordResetLink: {str(e)}", 500
 
-        
+
 # ======================================================================
 
 class ResetPassword(HandlerBase):
@@ -442,7 +451,7 @@ class ResetPassword(HandlerBase):
     def do_the_things( self ):
         response = "<!DOCTYPE html>\n"
         response += "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
-        response += f"<title>Password Reset</title>\n"
+        response += "<title>Password Reset</title>\n"
 
         # webapdirurl = str( pathlib.Path( web.ctx.env['SCRIPT_NAME'] ).parent )
         webapdirurl = str( pathlib.Path( web.ctx.homepath ).parent.parent )
@@ -453,7 +462,7 @@ class ResetPassword(HandlerBase):
         # response += "photodb.css\" rel=\"stylesheet\" type=\"text/css\">\n"
         response += "<script src=\"" + webapdirurl + "resetpasswd_start.js\" type=\"module\"></script>\n"
         response += "</head>\n<body>\n"
-        response += f"<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n";
+        response += "<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n"
 
         try:
             inputdata = web.input()
@@ -488,14 +497,14 @@ class ResetPassword(HandlerBase):
             response += "</div>\n"
             response += form.Input( name="linkuuid", id="resetpasswd_linkid", type="hidden",
                                          value=str(pwlink.id) ).render()
-            
+
             response += "</body>\n</html>\n"
             return response
         except Exception as e:
             sys.stderr.write( f'{traceback.format_exc()}\n' )
             return f"Exception in resetpassword: {str(e)}", 500
-                
-            
+
+
 # ======================================================================
 
 class ChangePassword(HandlerBase):
@@ -507,7 +516,7 @@ class ChangePassword(HandlerBase):
             sys.stderr.write( "In ChangePassword...\n" )
             inputdata = json.loads( web.data().decode(encoding="utf-8") )
             for key in [ "passwordlinkid", "publickey", "privatekey", "salt", "iv" ]:
-                if not key in inputdata:
+                if key not in inputdata:
                     return f"Error, call to changepassword without {key}", 500
 
             pwlink = get_password_link( inputdata['passwordlinkid'] )
@@ -537,8 +546,8 @@ class ChangePassword(HandlerBase):
         except Exception as e:
             sys.stderr.write( f'{traceback.format_exc()}\n' )
             return f"Exception in ChangePassword: {str(e)}", 500
-            
-            
+
+
 # ======================================================================
 
 class CheckIfAuth(HandlerBase):
@@ -558,6 +567,7 @@ class CheckIfAuth(HandlerBase):
                     }
         return { 'status': False }
 
+
 # ======================================================================
 
 class Logout(HandlerBase):
@@ -567,6 +577,7 @@ class Logout(HandlerBase):
     def do_the_things( self ):
         web.ctx.session.kill()
         return { 'status': 'Logged out' }
+
 
 # ======================================================================
 
@@ -586,4 +597,3 @@ urls = ( "/getchallenge", "GetAuthChallenge",
 )
 
 app = web.application( urls, locals() )
-
