@@ -38,22 +38,28 @@ RUN source /venv/bin/activate \
        requests \
        web.py
 
+RUN mkdir -p /usr/src/rkwebutil
+WORKDIR /usr/src/rkwebutil
+COPY . /usr/src/rkwebutil
+RUN source /venv/bin/activate && \
+    pip install .
+
 # ======================================================================
 FROM base AS webserver
 
 COPY --from=build /venv/ /venv/
 ENV PATH=/venv/bin:$PATH
 
-COPY docker_webpy/key.pem /usr/src/key.pem
-COPY docker_webpy/cert.pem /usr/src/cert.pem
+COPY test/docker_webpy/key.pem /usr/src/key.pem
+COPY test/docker_webpy/cert.pem /usr/src/cert.pem
 
 # Set up apache
 RUN ln -s ../mods-available/socache_shmcb.load /etc/apache2/mods-enabled/socache_shmcb.load
 RUN ln -s ../mods-available/ssl.load /etc/apache2/mods-enabled/ssl.load
 RUN ln -s ../mods-available/ssl.conf /etc/apache2/mods-enabled/ssl.conf
 RUN echo "Listen 8082" > /etc/apache2/ports.conf
-COPY docker_webpy/000-default.conf /etc/apache2/sites-available/
-COPY docker_webpy/wsgi.conf.patch /usr/src/
+COPY test/docker_webpy/000-default.conf /etc/apache2/sites-available/
+COPY test/docker_webpy/wsgi.conf.patch /usr/src/
 RUN patch /etc/apache2/mods-available/wsgi.conf /usr/src/wsgi.conf.patch
 
 # This next ones are horrible security... but this is a test environment, so whatevs

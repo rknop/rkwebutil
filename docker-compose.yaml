@@ -1,0 +1,170 @@
+# This is the docker compose file used for tests
+
+services:
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+        - "8025:8025"
+
+  postgres:
+    image: rknop/rkwebutil_test_postgres
+    build:
+      context: test/docker_postgres
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    healthcheck:
+      test: netcat -w 1 localhost 5432 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  createdb:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    image: rknop/rkwebutil_test_flask
+    build:
+      context: .
+      dockerfile: ./test/docker_flask/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    entrypoint:
+      - /bin/bash
+      - -c
+      - python3 /usr/src/createdb.py
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  flask:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8080 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: rknop/rkwebutil_test_flask
+    build:
+      context: .
+      dockerfile: test/docker_flask/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8080:8080"
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  webpy:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8082 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: rknop/rkwebutil_test_webpy
+    build:
+      context: .
+      dockerfile: test/docker_webpy/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8082:8082"
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  apache:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8084 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: rknop/rkwebutil_test_apache
+    build:
+      context: .
+      dockerfile: test/docker_apache/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8084:8084"
+    user: ${USERID:-0}:${GROUPID:-0}
+
+
+  shell:
+    depends_on:
+      postgres:
+        condition: service_started
+      flask:
+        condition: service_healthy
+      webpy:
+        condition: service_healthy
+      apache:
+        condition: service_healthy
+    image: rknop/rkwebutil_test
+    build:
+      context: test/docker_test
+    volumes:
+      - type: bind
+        source: ../
+        target: /rkwebutil_src
+    working_dir: /rkwebutil_src
+    entrypoint: [ "tail", "-f", "/etc/issue" ]
+    user: ${USERID:-0}:${GROUPID:-0}
+
+# Commented this next one out until I figure out how to get the
+#   pip install -e . inside it
+# runtests:
+#   depends_on:
+#     postgres:
+#       condition: service_started
+#     flask:
+#       condition: service_healthy
+#     webpy:
+#       condition: service_healthy
+#     apache:
+#       condition: service_healthy
+#   image: rknop/rkwebutil_test
+#   build:
+#     context: docker_test
+#   volumes:
+#     - type: bind
+#       source: .
+#       target: /tests
+#     - type: bind
+#       source: test_install
+#       target: /test_install
+#   working_dir: /tests
+#   entrypoint: [ "pytest", "-v" ]
+#   user: ${USERID:-0}:${GROUPID:-0}

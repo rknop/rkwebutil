@@ -3,7 +3,7 @@ import flask
 import flask_session
 import logging
 
-from . import rkauth_flask
+from rkwebutil import rkauth_flask
 
 def create_app():
     app = flask.Flask(  __name__ )

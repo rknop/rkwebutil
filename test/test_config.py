@@ -12,7 +12,7 @@ import pytest
 
 _rundir = pathlib.Path(__file__).parent
 sys.path.insert(0, '/test_install/html' )
-import config
+from rkwebutil import config
 
 # A note about pytest: Things aren't completely sandboxed.  When I call
 # config.Config.get(), it selts Config._default, and that carries over

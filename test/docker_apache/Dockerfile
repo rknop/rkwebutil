@@ -40,21 +40,27 @@ RUN source /venv/bin/activate \
        pytz \
        requests
 
+RUN mkdir -p /usr/src/rkwebutil
+WORKDIR /usr/src/rkwebutil
+COPY . /usr/src/rkwebutil
+RUN source /venv/bin/activate && \
+    pip install .
+
 # ======================================================================
 FROM base AS webserver
 
 COPY --from=build /venv/ /venv/
 ENV PATH=/venv/bin:$PATH
 
-COPY docker_apache/key.pem /usr/src/key.pem
-COPY docker_apache/cert.pem /usr/src/cert.pem
+COPY test/docker_apache/key.pem /usr/src/key.pem
+COPY test/docker_apache/cert.pem /usr/src/cert.pem
 
 # Set up apache
 RUN ln -s ../mods-available/socache_shmcb.load /etc/apache2/mods-enabled/socache_shmcb.load
 RUN ln -s ../mods-available/ssl.load /etc/apache2/mods-enabled/ssl.load
 RUN ln -s ../mods-available/ssl.conf /etc/apache2/mods-enabled/ssl.conf
 RUN echo "Listen 8084" > /etc/apache2/ports.conf
-COPY docker_apache/000-default.conf /etc/apache2/sites-available
+COPY test/docker_apache/000-default.conf /etc/apache2/sites-available
 
 # Sessions directory for flask
 RUN mkdir /sessions

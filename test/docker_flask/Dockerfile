@@ -1,4 +1,4 @@
-# This dockerfile must be run from the parent directory of the Dockerfile's directory
+# This dockerfile must be run from the top of the rkwebutil checkout
 
 FROM rknop/devuan-daedalus-rknop AS base
 LABEL maintainer="Rob Knop <rknop@pobox.com>"
@@ -46,6 +46,12 @@ RUN source /venv/bin/activate && \
        pytz \
        requests
 
+RUN mkdir -p /usr/src/rkwebutil
+WORKDIR /usr/src/rkwebutil
+COPY . /usr/src/rkwebutil
+RUN source /venv/bin/activate && \
+    pip install .
+
 # ======================================================================
 FROM base AS webserver
 
@@ -57,9 +63,15 @@ RUN mkdir /sessions
 # Need it if I'm going to run as whatever user.
 RUN chmod a+rwx /sessions
 
-COPY docker_flask/createdb.py /usr/src/createdb.py
-COPY docker_flask/key.pem /usr/src/key.pem
-COPY docker_flask/cert.pem /usr/src/cert.pem
+COPY test/docker_flask/createdb.py /usr/src/createdb.py
+COPY test/docker_flask/key.pem /usr/src/key.pem
+COPY test/docker_flask/cert.pem /usr/src/cert.pem
+
+COPY test/docker_flask/server.py /flask
+COPY test/docker_flask/ap /flask/ap
+RUN ln -s /flask/ap/static /flask/static
+RUN ln -s /flask/ap/templates /flask/templates
+WORKDIR /flask
 
 ENTRYPOINT [ "gunicorn", "--certfile", "/usr/src/cert.pem", "--keyfile", "/usr/src/key.pem", \
            "-w", "1", "--threads", "10", "-b", "0.0.0.0:8080", "--timeout", "0", "server:app" ]

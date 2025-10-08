@@ -26,7 +26,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.remote.webelement import WebElement
 
 sys.path.insert( 0, str(pathlib.Path(__file__).parent.parent) )
-from rkauth_client import rkAuthClient
+from rkwebutil.rkauth_client import rkAuthClient
 
 class AuthTestBase:
     url = None
