@@ -71,6 +71,7 @@ COPY test/docker_flask/server.py /flask
 COPY test/docker_flask/ap /flask/ap
 RUN ln -s /flask/ap/static /flask/static
 RUN ln -s /flask/ap/templates /flask/templates
+RUN cp -p /venv/lib/python3.11/site-packages/rkwebutil/static/* /flask/static/
 WORKDIR /flask
 
 ENTRYPOINT [ "gunicorn", "--certfile", "/usr/src/cert.pem", "--keyfile", "/usr/src/key.pem", \
