@@ -21,7 +21,9 @@ from Crypto.PublicKey import RSA
 
 
 class rkAuthClient:
-    def __init__( self, url, username, password, verify=True, logger=None ):
+    def __init__( self, url, username, password,
+                  retries=5, maxtimeout=30., retrysleep=0.3, sleepfac=2, sleepfuzz=True,
+                  verify=True, logger=None ):
         """Create a client to connect to a server that uses rkauth.
 
         After making an object, use .post() or .send() to communicate.
@@ -37,6 +39,26 @@ class rkAuthClient:
 
           password: str
 
+          retries : int, default 5
+            When calling send or post, if the request to the server
+            doesn't return a HTTP 200, try again at most this many
+            times.
+
+          maxtimeout : float, default 30.
+            If retries are taking a very long time, don't keep retrying
+            if this much time has passed.
+
+          retrysleep : float, default 0.2
+            After the first failed attempt to contact the server, sleep this many seconds
+            before retrying.
+
+          sleepfac : float, default 2
+            Multiply the sleep time by this much after each retry.
+
+          sleepfuzz : bool, default True
+            Randomly adjust the sleep time by 10% of itself (Gaussian, sort of) so that if
+            lots of processes are running, they will (hopefully) dsync.
+
           verify: bool, default True
             Verify SSL certs?  Passed on to requests functions via verify=
 
@@ -45,11 +67,6 @@ class rkAuthClient:
 
         """
 
-        self.url = url
-        self.username = username
-        self.password = password
-        self.verify_ssl = verify
-        self.req = None
         self.logger = logger
         if self.logger is None:
             self.logger = logging.getLogger( "rkAuthClient" )
@@ -61,6 +78,17 @@ class rkAuthClient:
                                                datefmt='%Y-%m-%d %H:%M:%S' )
                 logout.setFormatter( formatter )
                 logout.setLevel( logging.INFO )
+
+        self.url = url
+        self.username = username
+        self.password = password
+        self.verify_ssl = verify
+        self.retries = retries
+        self.maxtimeout = maxtimeout
+        self.retrysleep = retrysleep
+        self.sleepfac = sleepfac
+        self.sleepfuzz = sleepfuzz
+
         self.clear_user()
 
 
@@ -72,19 +100,19 @@ class rkAuthClient:
         self.usergroups = None
 
 
-    def logout( self, always_verify=False ):
+    def logout( self, always_verify=False, **kwargs ):
         if always_verify or ( self.req is None ):
-            self.verify_logged_in()
+            self.verify_logged_in( **kwargs )
 
         if self.req is not None:
-            res = self.post( "auth/logout" )
+            res = self.post( "auth/logout", **kwargs )
             data = res.json()
             if ( 'status' not in data ) or ( data['status'] != 'Logged out' ):
                 raise RuntimeError( f"Unexpected response logging out: {res.text}" )
             self.clear_user()
 
 
-    def verify_logged_in( self, always_verify=False ):
+    def verify_logged_in( self, always_verify=False, **kwargs ):
         """Log into the server if necessary.
 
         Raises an exception if logging in fails for whatever reason.
@@ -97,6 +125,8 @@ class rkAuthClient:
             Normally, if you've verified logging in before and have a
             session, just quickly return.  Set always_verify to True to
             contact the server and confirm that you're logged in.
+
+          **kwargs : Additional arguments are sent on to self.send and self.post
 
         Returns
         -------
@@ -117,7 +147,7 @@ class rkAuthClient:
                 self.logout()
 
         self.req = requests.session()
-        res = self.post( 'auth/getchallenge', { 'username': self.username } )
+        res = self.post( 'auth/getchallenge', { 'username': self.username }, **kwargs )
         if res.status_code != 200:
             raise RuntimeError( f"Error logging in: {res.text}" )
         try:
@@ -138,7 +168,9 @@ class rkAuthClient:
         except Exception:
             raise RuntimeError( "Failed to log in, probably incorrect password" )
 
-        data = self.send( 'auth/respondchallenge', { 'username': self.username, 'response': decrypted_challenge } )
+        data = self.send( 'auth/respondchallenge',
+                          { 'username': self.username, 'response': decrypted_challenge },
+                          **kwargs )
         if ( not isinstance( data, dict ) ) or ( 'status' not in data ):
             raise RuntimeError( f"Unexpected response logging in: {data}" )
         if data['status'] != 'ok':
@@ -152,7 +184,7 @@ class rkAuthClient:
 
 
     def post( self, url, postjson={},
-              retries=5, maxtimeout=30., retrysleep=0.3, sleepfac=2, sleepfuzz=True,
+              retries=None, maxtimeout=None, retrysleep=None, sleepfac=None, sleepfuzz=None,
               verifylogin=False ):
         """Send a POST query to the server.
 
@@ -175,8 +207,8 @@ class rkAuthClient:
             An object (usually a dictionary) to encode as json and send to the server
             as the body of the request.  Passed via requests' json= parameter.
 
-          retries : int, default 5
-            If the req doesn't return a HTTP 200, try again at most this many times.
+          retries, maxtimeout, retrysleep, sleepfac, sleepfuzz : mixed
+            For this one call, override the values set during client constructoin.
 
           maxtimeout : float, default 600.
             If retries are taking a very long time, don't keep retrying
@@ -205,8 +237,15 @@ class rkAuthClient:
 
         """
 
+        retries = self.retries if retries is None else retries
+        maxtimeout = self.maxtimeout if maxtimeout is None else maxtimeout
+        retrysleep = self.retrysleep if retrysleep is None else retrysleep
+        sleepfac = self.sleepfac if sleepfac is None else sleepfac
+        sleepfuzz = self.sleepfuzz if sleepfuzz is None else sleepfuzz
+
         if ( self.req is None ) or verifylogin:
-            self.verify_logged_in()
+            self.verify_logged_in( retries=retries, maxtimeout=maxtimeout, retrysleep=retrysleep,
+                                   sleepfac=sleepfac, sleepfuz=sleepfuzz )
 
         slash = '/' if ( ( self.url[-1] != '/' ) and ( url[0] != '/' ) ) else ''
         url = f'{self.url}{slash}{url}'
