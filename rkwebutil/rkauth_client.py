@@ -245,7 +245,7 @@ class rkAuthClient:
 
         if ( self.req is None ) or verifylogin:
             self.verify_logged_in( retries=retries, maxtimeout=maxtimeout, retrysleep=retrysleep,
-                                   sleepfac=sleepfac, sleepfuz=sleepfuzz )
+                                   sleepfac=sleepfac, sleepfuzz=sleepfuzz )
 
         slash = '/' if ( ( self.url[-1] != '/' ) and ( url[0] != '/' ) ) else ''
         url = f'{self.url}{slash}{url}'
