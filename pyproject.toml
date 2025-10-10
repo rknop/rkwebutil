@@ -21,9 +21,6 @@ classifiers = [
 
 dependencies = [
   "dateutils>=0.6.12,<0.7.0",
-  "flask-session>=0.8.0,<0.9.0",
-  "flask>=3.1,<4.0",
-  "psycopg>=3.2.0,<4.0.0",
   "pycryptodome>=3.20,<4.0",
   "pytz>=2022.7.1",
   "pyyaml>=6.0.2,<7.0.0",
@@ -33,13 +30,11 @@ dependencies = [
 license-files = [ "LICENSE" ]
 
 [project.optional-dependencies]
-test = [ "pytest",
+test = [ "psycopg>=3.2.0,<4.0.0",
+         "pytest",
          "remote-pdb",
-         # Ideally, webpy is part of dependencies, but it seems to be causing
-         #  trouble in other things, so stick it here for now.  I may just
-         #  deprecate the web.py interfaces as I've moved fully to flask
-         #  myself.
-         "webpy==0.62"
+         "selenium",
+         "selenium_firefox",
        ]
 
 [project.urls]

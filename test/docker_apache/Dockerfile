@@ -1,6 +1,6 @@
 # This dockerfile must be run from the top of the rkwebutil checkout
 
-FROM rknop/devuan-daedalus-rknop AS base
+FROM debian:bookworm AS base
 LABEL maintainer="Rob Knop <rknop@pobox.com>"
 
 SHELL ["/bin/bash", "-c"]
@@ -11,11 +11,18 @@ ENV TZ="UTC"
 RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get -y install -y \
-       python3 tmux netcat-openbsd curl elinks postgresql-client make \
+       python3 locales tmux less netcat-openbsd curl elinks postgresql-client make \
        apache2 apache2-bin libapache2-mod-wsgi-py3 \
     && apt-get -y autoremove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN cat /etc/locale.gen | perl -pe 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' > /etc/locale.gen.new \
+    && mv /etc/locale.gen.new /etc/locale.gen
+RUN locale-gen en_US.utf8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
 
 RUN ln -s /usr/bin/python3 /usr/bin/python
 ENV LESS=-XLRi
@@ -31,6 +38,9 @@ RUN python3 -mvenv /venv
 
 RUN source /venv/bin/activate \
     && pip --no-cache install \
+       flask \
+       flask-session \
+       psycopg \
        setuptools \
        setuptools-scm
 

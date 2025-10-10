@@ -12,10 +12,9 @@ RUN mkdir /build
 WORKDIR /build
 
 RUN apt-get update && apt-get -y upgrade && \
-  apt-get -y install \
-    postgresql-${PGVERSION} postgresql-client-${PGVERSION} postgresql-server-dev-${PGVERSION} pgtop \
-    libssl-dev libreadline-dev zlib1g-dev \
-    tmux netcat-openbsd && \
+  apt-get -y install --no-install-recommends \
+    postgresql-${PGVERSION} postgresql-client-${PGVERSION} pgtop \
+    libssl3 libreadline8 zlib1g libzstd1 liblz4-1 tmux netcat-openbsd && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists/*
 
