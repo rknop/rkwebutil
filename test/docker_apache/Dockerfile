@@ -31,14 +31,6 @@ RUN python3 -mvenv /venv
 
 RUN source /venv/bin/activate \
     && pip --no-cache install \
-       flask \
-       flask-session \
-       flask-sock \
-       psycopg \
-       pycryptodome \
-       python-dateutil \
-       pytz \
-       requests \
        setuptools \
        setuptools-scm
 

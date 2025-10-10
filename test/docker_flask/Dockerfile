@@ -36,18 +36,10 @@ RUN python3 -mvenv /venv
 RUN source /venv/bin/activate && \
     pip --no-cache install \
        apscheduler \
-       flask \
-       flask-session \
-       flask-sock \
        gunicorn \
-       psycopg \
-       pycryptodome \
-       python-dateutil \
-       pytz \
-       requests \
        setuptools \
-       setuptools-scm \
-xo
+       setuptools-scm
+
 RUN mkdir -p /usr/src/rkwebutil
 WORKDIR /usr/src/rkwebutil
 COPY . /usr/src/rkwebutil

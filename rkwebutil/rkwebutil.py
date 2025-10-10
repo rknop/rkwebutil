@@ -126,6 +126,7 @@ def asUUID( val, canbenone=True ):
     else:
         return uuid.UUID( val )
 
+
 NULLUUID = uuid.UUID( '00000000-0000-0000-0000-000000000000' )
 
 

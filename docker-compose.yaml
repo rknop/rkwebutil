@@ -11,7 +11,7 @@ services:
         - "8025:8025"
 
   postgres:
-    image: rknop/rkwebutil_test_postgres
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_postgres:${DOCKER_VERSION:-test20251010}
     build:
       context: test/docker_postgres
     environment:
@@ -30,7 +30,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    image: rknop/rkwebutil_test_flask
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_flask:${DOCKER_VERSION:-test20251010}
     build:
       context: .
       dockerfile: ./test/docker_flask/Dockerfile
@@ -58,7 +58,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: rknop/rkwebutil_test_flask
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_flask:${DOCKER_VERSION:-test20251010}
     build:
       context: .
       dockerfile: test/docker_flask/Dockerfile
@@ -84,7 +84,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: rknop/rkwebutil_test_webpy
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_webpy:${DOCKER_VERSION:-test20251010}
     build:
       context: .
       dockerfile: test/docker_webpy/Dockerfile
@@ -110,7 +110,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: rknop/rkwebutil_test_apache
+    image: ${DOCKER_ACHIVE:-ghcr.io/rknop}rknop/rkwebutil_test_apache:${DOCKER_VERSION:-test20251010}
     build:
       context: .
       dockerfile: test/docker_apache/Dockerfile
@@ -136,39 +136,37 @@ services:
         condition: service_healthy
       apache:
         condition: service_healthy
-    image: rknop/rkwebutil_test
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251010}
     build:
       context: test/docker_test
     volumes:
       - type: bind
-        source: ../
+        source: ./
         target: /rkwebutil_src
     working_dir: /rkwebutil_src
     entrypoint: [ "tail", "-f", "/etc/issue" ]
     user: ${USERID:-0}:${GROUPID:-0}
 
-# Commented this next one out until I figure out how to get the
-#   pip install -e . inside it
-# runtests:
-#   depends_on:
-#     postgres:
-#       condition: service_started
-#     flask:
-#       condition: service_healthy
-#     webpy:
-#       condition: service_healthy
-#     apache:
-#       condition: service_healthy
-#   image: rknop/rkwebutil_test
-#   build:
-#     context: docker_test
-#   volumes:
-#     - type: bind
-#       source: .
-#       target: /tests
-#     - type: bind
-#       source: test_install
-#       target: /test_install
-#   working_dir: /tests
-#   entrypoint: [ "pytest", "-v" ]
-#   user: ${USERID:-0}:${GROUPID:-0}
+  runtests:
+    depends_on:
+      postgres:
+        condition: service_started
+      flask:
+        condition: service_healthy
+      webpy:
+        condition: service_healthy
+      apache:
+        condition: service_healthy
+    image: rknop/rkwebutil_test
+    build:
+      context: test/docker_test
+    volumes:
+      - type: bind
+        source: ./
+        target: /rkwebutil_src
+    working_dir: /rkwebutil_src
+    entrypoint: >
+      bash -c "pip install -e .[test] &&
+               cd test &&
+               pytest -v"
+    user: ${USERID:-0}:${GROUPID:-0}

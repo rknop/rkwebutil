@@ -31,14 +31,8 @@ RUN python3 -mvenv /venv
 
 RUN source /venv/bin/activate \
     && pip --no-cache install \
-       psycopg \
-       pycryptodome \
-       python-dateutil \
-       pytz \
-       requests \
        setuptools \
-       setuptools-scm \
-       web.py
+       setuptools-scm
 
 RUN mkdir -p /usr/src/rkwebutil
 WORKDIR /usr/src/rkwebutil
