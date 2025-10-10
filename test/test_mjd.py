@@ -45,7 +45,7 @@ class TestMJD:
         ff.quit()
 
     def test_mjdtodate( self, browser ):
-        ff, mjdinput, dateinput, mjdbutton, datebutton = browser
+        _ff, mjdinput, dateinput, mjdbutton, _datebutton = browser
 
         mjd_date = { "60475"       : "^2024-06-14T00:00:00.000Z$",
                      "60474.99999" : "^2024-06-13T23:59:59.136Z$",
@@ -65,7 +65,7 @@ class TestMJD:
             assert re.search( datestr, dateinput.get_attribute( 'value' ) )
 
     def test_datetomjd( self, browser ):
-        ff, mjdinput, dateinput, mjdbutton, datebutton = browser
+        _ff, mjdinput, dateinput, _mjdbutton, datebutton = browser
 
         date_mjd = { "2024-06-14T00:00:00.000Z"   : 60475,
                      "2024-06-13T23:59:59.136Z"   : 60474.99999,

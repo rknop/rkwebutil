@@ -36,6 +36,8 @@ RUN source /venv/bin/activate \
        python-dateutil \
        pytz \
        requests \
+       setuptools \
+       setuptools-scm \
        web.py
 
 RUN mkdir -p /usr/src/rkwebutil

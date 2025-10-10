@@ -44,8 +44,10 @@ RUN source /venv/bin/activate && \
        pycryptodome \
        python-dateutil \
        pytz \
-       requests
-
+       requests \
+       setuptools \
+       setuptools-scm \
+xo
 RUN mkdir -p /usr/src/rkwebutil
 WORKDIR /usr/src/rkwebutil
 COPY . /usr/src/rkwebutil

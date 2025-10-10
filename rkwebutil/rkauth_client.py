@@ -3,12 +3,16 @@
 
 # This file is part of rkwebutil
 #
-# rkwebutil is Copyright 2024 by Robert Knop
+# rkwebutil is Copyright 2025 by Robert Knop
 #
 # rkwebutil is free software, available under the BSD 3-clause license (see LICENSE)
 
+import sys
+import time
 import requests
 import binascii
+import random
+import logging
 
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Hash import SHA256
@@ -17,12 +21,12 @@ from Crypto.PublicKey import RSA
 
 
 class rkAuthClient:
-    def __init__( self, url, username, password, verify=True ):
+    def __init__( self, url, username, password, verify=True, logger=None ):
         """Create a client to connect to a server that uses rkauth.
 
-        After making an object, use .send() or .send_get_json() to
-        communicate.  You can also get the logged-in python requests object
-        directly via the .req property after calling .verify_logged_in().
+        After making an object, use .post() or .send() to communicate.
+        You can also get the logged-in python requests object directly
+        via the .req property after calling .verify_logged_in().
 
         Parameters
         ----------
@@ -36,12 +40,27 @@ class rkAuthClient:
           verify: bool, default True
             Verify SSL certs?  Passed on to requests functions via verify=
 
+          logger : logging.Logger, default None
+            Logger to use for error messages.  If None, will make one.
+
         """
 
         self.url = url
         self.username = username
         self.password = password
-        self.verify = verify
+        self.verify_ssl = verify
+        self.req = None
+        self.logger = logger
+        if self.logger is None:
+            self.logger = logging.getLogger( "rkAuthClient" )
+            self.logger.propagate = False
+            if not self.logger.hasHandlers():
+                logout = logging.StreamHandler( sys.stderr )
+                self.logger.addHandler( logout )
+                formatter = logging.Formatter( '[%(asctime)s - %(levelname)s] - %(message)s',
+                                               datefmt='%Y-%m-%d %H:%M:%S' )
+                logout.setFormatter( formatter )
+                logout.setLevel( logging.INFO )
         self.clear_user()
 
 
@@ -53,81 +72,99 @@ class rkAuthClient:
         self.usergroups = None
 
 
-    def verify_logged_in( self ):
+    def logout( self, always_verify=False ):
+        if always_verify or ( self.req is None ):
+            self.verify_logged_in()
+
+        if self.req is not None:
+            res = self.post( "auth/logout" )
+            data = res.json()
+            if ( 'status' not in data ) or ( data['status'] != 'Logged out' ):
+                raise RuntimeError( f"Unexpected response logging out: {res.text}" )
+            self.clear_user()
+
+
+    def verify_logged_in( self, always_verify=False ):
         """Log into the server if necessary.
 
         Raises an exception if logging in fails for whatever reason.
 
+        Will try to log in if you aren't logged in yet.
+
+        Parameters
+        ----------
+          always_verify : bool, default False
+            Normally, if you've verified logging in before and have a
+            session, just quickly return.  Set always_verify to True to
+            contact the server and confirm that you're logged in.
+
+        Returns
+        -------
+          True if logged in, False otherwise.
+
+          Really will likely raise an exception if not logged in and can't log in.
+
         """
 
-        must_log_in = False
-        if self.req is None:
-            must_log_in = True
-        else:
-            res = self.req.post( f'{self.url}/auth/isauth', verify=self.verify )
-            if res.status_code != 200:
-                raise RuntimeError( f"Error talking to server: {res.txt}" )
+        if self.req is not None:
+            if not always_verify:
+                return True
+            res = self.post( 'auth/isauth' )
             data = res.json()
-            if not data['status']:
-                must_log_in = True
-            else:
-                if data['username'] != self.username:
-                    res = self.req.post( f"{self.url}/auth/logout", verify=self.verify )
-                    if res.status_code != 200:
-                        raise RuntimeError( f"Error logging out: {res.text}" )
-                    data = res.json()
-                    if ( 'status' not in data ) or ( data['status'] != 'Logged out' ):
-                        raise RuntimeError( f"Unexpected response logging out: {res.text}" )
-                    self.clear_user()
-                    must_log_in = True
+            if data['status']:
+                if data['username'] == self.username:
+                    return True
+                self.logout()
 
-        if must_log_in:
-            self.req = requests.session()
-            res = self.req.post( f'{self.url}/auth/getchallenge',
-                                 json={ 'username': self.username },
-                                 verify=self.verify )
-            if res.status_code != 200:
-                raise RuntimeError( f"Error logging in: {res.text}" )
-            try:
-                data = res.json()
-                challenge = binascii.a2b_base64( data['challenge'] )
-                enc_privkey = binascii.a2b_base64( data['privkey'] )
-                salt = binascii.a2b_base64( data['salt'] )
-                iv = binascii.a2b_base64( data['iv'] )
-                aeskey = PBKDF2( self.password.encode('utf-8'), salt, 32, count=100000, hmac_hash_module=SHA256 )
-                aescipher = AES.new( aeskey, AES.MODE_GCM, nonce=iv )
-                # When javascript created the encrypted AES key, it appended
-                #   a 16-byte auth tag to the end of the ciphertext. (Python's
-                #   Crypto AES-GCM handling treates this as a separate thing.)
-                privkeybytes = aescipher.decrypt_and_verify( enc_privkey[:-16], enc_privkey[-16:] )
-                privkey = RSA.import_key( privkeybytes )
-                rsacipher = PKCS1_OAEP.new( privkey, hashAlgo=SHA256 )
-                decrypted_challenge = rsacipher.decrypt( challenge ).decode( 'utf-8' )
-            except Exception:
-                raise RuntimeError( "Failed to log in, probably incorrect password" )
-
-
-            res = self.req.post( f'{self.url}/auth/respondchallenge',
-                                 json= { 'username': self.username, 'response': decrypted_challenge },
-                                 verify=self.verify )
-            if res.status_code != 200:
-                raise RuntimeError( f"Failed to log in: {res.text}" )
+        self.req = requests.session()
+        res = self.post( 'auth/getchallenge', { 'username': self.username } )
+        if res.status_code != 200:
+            raise RuntimeError( f"Error logging in: {res.text}" )
+        try:
             data = res.json()
-            if ( ( data['status'] != 'ok' ) or ( data['username'] != self.username ) ):
-                raise RuntimeError( f"Unexpected response logging in: {res.text}" )
-            self.useruuid = data['useruuid']
-            self.useremail = data['useremail']
-            self.userdisplayname = data['userdisplayname']
-            self.usergroups = data['usergroups']
+            challenge = binascii.a2b_base64( data['challenge'] )
+            enc_privkey = binascii.a2b_base64( data['privkey'] )
+            salt = binascii.a2b_base64( data['salt'] )
+            iv = binascii.a2b_base64( data['iv'] )
+            aeskey = PBKDF2( self.password.encode('utf-8'), salt, 32, count=100000, hmac_hash_module=SHA256 )
+            aescipher = AES.new( aeskey, AES.MODE_GCM, nonce=iv )
+            # When javascript created the encrypted AES key, it appended
+            #   a 16-byte auth tag to the end of the ciphertext. (Python's
+            #   Crypto AES-GCM handling treates this as a separate thing.)
+            privkeybytes = aescipher.decrypt_and_verify( enc_privkey[:-16], enc_privkey[-16:] )
+            privkey = RSA.import_key( privkeybytes )
+            rsacipher = PKCS1_OAEP.new( privkey, hashAlgo=SHA256 )
+            decrypted_challenge = rsacipher.decrypt( challenge ).decode( 'utf-8' )
+        except Exception:
+            raise RuntimeError( "Failed to log in, probably incorrect password" )
+
+        data = self.send( 'auth/respondchallenge', { 'username': self.username, 'response': decrypted_challenge } )
+        if ( not isinstance( data, dict ) ) or ( 'status' not in data ):
+            raise RuntimeError( f"Unexpected response logging in: {data}" )
+        if data['status'] != 'ok':
+            raise RuntimeError( "Authentication failure." )
+        if data['username'] != self.username:
+            raise ValueError( f"WEIRD: logged in as user {data['username']}, but expected {self.username}" )
+        self.useruuid = data['useruuid']
+        self.useremail = data['useremail']
+        self.userdisplayname = data['userdisplayname']
+        self.usergroups = data['usergroups']
 
 
-    def post( self, url, postjson={} ):
+    def post( self, url, postjson={},
+              retries=5, maxtimeout=30., retrysleep=0.3, sleepfac=2, sleepfuzz=True,
+              verifylogin=False ):
         """Send a POST query to the server.
 
-        Verifies that you're logged in, logs in if necessary.
+        Logs in if necessary.  Retries several times if there is an
+        error, in an attempt to work around temporary internet
+        connectivity glithces.  This does mean that if there is a
+        legitimate failure (like an error return), it will take some
+        time (by default, ~10 seconds) for the failure to actually return
+        as it sleeps and retries.
 
         If you're expecting a json-encoded response, you may want to use
-        send()
+        send().
 
         Parameters
         ----------
@@ -137,6 +174,30 @@ class rkAuthClient:
           postjson: object, default {}
             An object (usually a dictionary) to encode as json and send to the server
             as the body of the request.  Passed via requests' json= parameter.
+
+          retries : int, default 5
+            If the req doesn't return a HTTP 200, try again at most this many times.
+
+          maxtimeout : float, default 600.
+            If retries are taking a very long time, don't keep retrying
+            if this much time has passed.
+
+          retrysleep : float, default 0.2
+            After the first failed attempt to contact the server, sleep this many seconds
+            before retrying.
+
+          sleepfac : float, default 2
+            Multiply the sleep time by this much after each retry.
+
+          sleepfuzz : bool, default True
+            Randomly adjust the sleep time by 10% of itself (Gaussian, sort of) so that if
+            lots of processes are running, they will (hopefully) dsync.
+
+          verifylogin : bool, default False
+            If True, then before sending the actual request, will send a
+            request to the server verifying that you're logged in.  If
+            False, then just sent the query, unless we don't have an
+            active connection, in which case, try to log in.
 
         Returns
         -------
@@ -144,27 +205,48 @@ class rkAuthClient:
 
         """
 
-        self.verify_logged_in()
+        if ( self.req is None ) or verifylogin:
+            self.verify_logged_in()
+
         slash = '/' if ( ( self.url[-1] != '/' ) and ( url[0] != '/' ) ) else ''
-        res = self.req.post( f'{self.url}{slash}{url}', json=postjson, verify=self.verify )
-        if res.status_code != 200:
-            raise RuntimeError( f"Got response {res.status_code}: {res.text}" )
-        return res
+        url = f'{self.url}{slash}{url}'
+
+        t0 = time.perf_counter()
+        meansleep = retrysleep
+        curtry = 0
+        retries = max( retries, 1 )
+        while curtry < retries:
+            try:
+                res = self.req.post( url, json=postjson, verify=self.verify_ssl )
+                if res.status_code != 200:
+                    raise RuntimeError( f"Got response {res.status_code}: {res.text}" )
+                return res
+            except Exception as ex:
+                curtry += 1
+                t = time.perf_counter()
+                msg = ( f"Failed to connect to {url} after {curtry} {'tries' if curtry!=1 else 'try'} "
+                        f"over {t-t0:.1f} seconds" )
+                if ( curtry == retries ) or ( t-t0 >= maxtimeout ):
+                    self.logger.error( f"{msg}; giving up.  Last error was {ex}" )
+                    raise RuntimeError( f"{msg}; giving up.  Last error was {ex}" )
+
+                tosleep = random.gauss( meansleep, 0.1 * meansleep ) if sleepfuzz else meansleep
+                tosleep = max( tosleep, 0.7 * meansleep )
+                _perchance_to_dream = True
+                self.logger.warning( f"{msg}; sleeping {tosleep:.1f}s and trying again." )
+                self.logger.debug( f"Last error: {ex}" )
+                time.sleep( tosleep )
+                meansleep *= sleepfac
+
+        raise RuntimeError( "This shouild never happen.")
 
 
-    def send( self, url, postjson={} ):
+    def send( self, url, *args, **kwargs ):
         """Send a POST query to the server, parse the json response to a python object.
 
         Raises an exception if the server doesn't send back application/json
 
-        Parameters
-        ----------
-          url: str
-            URL relative to the base webap URL passed to the rkAuthClient constructor.
-
-          postjson: object, default {}
-            An object (usually a dictionary) to encode as json and send to the server
-            as the body of the request.  Passed via requests' json= parameter.
+        Takes all the same arguments as post().
 
         Returns
         -------
@@ -172,8 +254,13 @@ class rkAuthClient:
 
         """
 
-        res = self.post( url, postjson=postjson )
-        if res.headers.get('Content-Type')[:16] != 'application/json':
-            raise RuntimeError( f"Expected json back from conductor but got "
-                                f"{res.headers.get('Content_Type')}" )
+        res = self.post( url, *args, **kwargs )
+        mtype = res.headers.get('Content-Type')
+        if ( len( mtype ) < 16 ) or ( mtype[:16] != 'application/json' ):
+            msg = f"Expected json, but got {mtype} from {url}"
+            if ( len( mtype ) > 10 ) and ( mtype[:10] == 'text/plain' ):
+                self.logger.error( f"{msg} ; content of response: {res.text}" )
+            else:
+                self.logger.error( msg )
+            raise RuntimeError( msg )
         return res.json()
