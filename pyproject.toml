@@ -28,14 +28,18 @@ dependencies = [
   "pytz>=2022.7.1",
   "pyyaml>=6.0.2,<7.0.0",
   "requests>=2.28,<3.0",
-  "web.py==0.62"
 ]
 
 license-files = [ "LICENSE" ]
 
 [project.optional-dependencies]
 test = [ "pytest",
-         "remote-pdb"
+         "remote-pdb",
+         # Ideally, webpy is part of dependencies, but it seems to be causing
+         #  trouble in other things, so stick it here for now.  I may just
+         #  deprecate the web.py interfaces as I've moved fully to flask
+         #  myself.
+         "webpy==0.62"
        ]
 
 [project.urls]
