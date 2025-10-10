@@ -1,6 +1,7 @@
 import re
 import datetime
 import dateutil
+import pytz
 import uuid
 
 
@@ -15,6 +16,7 @@ class ErrorMsg( Exception ):
 
 def sanitizeFilename( filename ):
     fname = re.sub( r'[^A-Za-z0-9\.\-_]', '_', filename )
+    fname = re.sub( r'[^A-Za-z0-9\.\-_]', r'_', filename )
     if len(fname) == 0:
         fname = "empty_filename"
     return fname
@@ -33,7 +35,7 @@ def sanitizeHTML(text, oneline = False):
 
     def tagfilter(text):
         tagfinder = re.compile(r"^\<(\S+)\>$")
-        # linkfinder = re.compile("^\s*a\s+\"[^\"]+\"\s*")     # I think this didn't work
+        # linkfinder = re.compile(r"^\s*a\s+\"[^\"]+\"\s*")     # I think this didn't work
         linkfinder = re.compile(r"^\s*a\s+href\s*=\s*\"[^\"]+\"\s*((target|style)\s*=\s*\"[^\"]*\"\s*)*")
         imgfinder = re.compile(r"^\s*img\s+((src|style|width|height|alt)\s*=\s*\"[^\"]*\"\s*)*$")
         match = tagfinder.match(text)
@@ -113,9 +115,6 @@ def intOrError( val, description ):
 
 # ======================================================================
 
-NULLUUID = uuid.UUID( '00000000-0000-0000-0000-000000000000' )
-
-
 def asUUID( val, canbenone=True ):
     if val is None:
         if canbenone:
@@ -127,16 +126,22 @@ def asUUID( val, canbenone=True ):
     else:
         return uuid.UUID( val )
 
+NULLUUID = uuid.UUID( '00000000-0000-0000-0000-000000000000' )
+
 
 # ======================================================================
 
-def asDateTime( string ):
+def asDateTime( string, defaultutc=False ):
     try:
         if string is None:
             return None
         if isinstance( string, datetime.datetime ):
             return string
         dateval = dateutil.parser.parse( string )
+
+        if defaultutc and ( dateval.tzinfo is None ):
+            dateval = pytz.utc.localize( dateval )
+
         return dateval
     except Exception:
         raise ErrorMsg( f'Error, {string} is not a valid date and time.' )

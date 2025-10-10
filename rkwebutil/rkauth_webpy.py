@@ -86,10 +86,9 @@ import json
 import datetime
 
 import pytz
-import psycopg2
-import psycopg2.extras
-import psycopg2.extensions
-psycopg2.extensions.register_adapter( dict, psycopg2.extras.Json )
+import psycopg
+import psycopg.rows
+import psycopg.types.json
 
 import smtplib
 import ssl
@@ -173,9 +172,9 @@ class RKAuthConfig:
 
 @contextlib.contextmanager
 def _con_and_cursor():
-    dbcon = psycopg2.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
-                              user=RKAuthConfig.db_user, password=RKAuthConfig.db_password,
-                              cursor_factory=psycopg2.extras.NamedTupleCursor )
+    dbcon = psycopg.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
+                             user=RKAuthConfig.db_user, password=RKAuthConfig.db_password,
+                             row_factory=psycopg.rows.namedtuple_row )
     cursor = dbcon.cursor()
 
     yield dbcon, cursor
@@ -536,9 +535,11 @@ class ChangePassword(HandlerBase):
                                 f"WHERE id=%(uuid)s",
                                 { 'uuid': user.id,
                                   'pubkey': inputdata['publickey'],
-                                  'privkey': { 'privkey': inputdata['privatekey'],
-                                               'salt': inputdata['salt'],
-                                               'iv': inputdata['iv'] } } )
+                                  'privkey': psycopg.types.json.Jsonb(
+                                      { 'privkey': inputdata['privatekey'],
+                                        'salt': inputdata['salt'],
+                                        'iv': inputdata['iv'] } ),
+                                 } )
                 cursor.execute( f"DELETE FROM {RKAuthConfig.passwordlink_table} WHERE id=%(uuid)s",
                                 { 'uuid': inputdata['passwordlinkid'] } )
                 con.commit()
