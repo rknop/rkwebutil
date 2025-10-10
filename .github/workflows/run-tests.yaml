@@ -46,11 +46,7 @@ jobs:
 
       - name: pull docker images
         run: |
-          docker pull ghcr.io/rknop/rkwebutil_test_postgres:test20251010
-          docker pull ghcr.io/rknop/rkwebutil_test_flask:test20251010
-          docker pull ghcr.io/rknop/rkwebutil_test_webpy:test20251010
-          docker pull ghcr.io/rknop/rkwebutil_test_apache:test20251010
-          docker pull ghcr.io/rknop/rkwebutil_:test20251010
+          docker compose pull postgres flask webpy apache shell
 
       - name: run test
         run: |
