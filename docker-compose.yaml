@@ -110,7 +110,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: ${DOCKER_ACHIVE:-ghcr.io/rknop}rknop/rkwebutil_test_apache:${DOCKER_VERSION:-test20251010}
+    image: ${DOCKER_ACHIVE:-ghcr.io/rknop}/rkwebutil_test_apache:${DOCKER_VERSION:-test20251010}
     build:
       context: .
       dockerfile: test/docker_apache/Dockerfile
@@ -157,7 +157,7 @@ services:
         condition: service_healthy
       apache:
         condition: service_healthy
-    image: rknop/rkwebutil_test
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251010}
     build:
       context: test/docker_test
     volumes:
