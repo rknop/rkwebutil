@@ -183,7 +183,7 @@ class rkAuthClient:
         self.usergroups = data['usergroups']
 
 
-    def post( self, url, postjson={},
+    def post( self, url, postjson={}, data=None,
               retries=None, maxtimeout=None, retrysleep=None, sleepfac=None, sleepfuzz=None,
               verifylogin=False ):
         """Send a POST query to the server.
@@ -206,6 +206,9 @@ class rkAuthClient:
           postjson: object, default {}
             An object (usually a dictionary) to encode as json and send to the server
             as the body of the request.  Passed via requests' json= parameter.
+
+          data: bytes or string or something
+            Data to send on to requests as the POST body.  Do not use boht this and postjson.
 
           retries, maxtimeout, retrysleep, sleepfac, sleepfuzz : mixed
             For this one call, override the values set during client constructoin.
@@ -256,7 +259,7 @@ class rkAuthClient:
         retries = max( retries, 1 )
         while curtry < retries:
             try:
-                res = self.req.post( url, json=postjson, verify=self.verify_ssl )
+                res = self.req.post( url, data=data, json=postjson, verify=self.verify_ssl )
                 if res.status_code != 200:
                     raise RuntimeError( f"Got response {res.status_code}: {res.text}" )
                 return res
