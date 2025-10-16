@@ -183,9 +183,10 @@ class rkAuthClient:
         self.usergroups = data['usergroups']
 
 
-    def post( self, url, postjson={}, data=None,
+    def post( self, url, json=None, data=None,
               retries=None, maxtimeout=None, retrysleep=None, sleepfac=None, sleepfuzz=None,
-              verifylogin=False ):
+              verifylogin=False,
+              **kwargs ):
         """Send a POST query to the server.
 
         Logs in if necessary.  Retries several times if there is an
@@ -203,7 +204,7 @@ class rkAuthClient:
           url: str
             URL relative to the base webap URL passed to the rkAuthClient constructor.
 
-          postjson: object, default {}
+          json: object, default None
             An object (usually a dictionary) to encode as json and send to the server
             as the body of the request.  Passed via requests' json= parameter.
 
@@ -234,6 +235,8 @@ class rkAuthClient:
             False, then just sent the query, unless we don't have an
             active connection, in which case, try to log in.
 
+          **kwargs : remaining arguments are sent on to requests.post
+
         Returns
         -------
           A requests Response object
@@ -259,7 +262,7 @@ class rkAuthClient:
         retries = max( retries, 1 )
         while curtry < retries:
             try:
-                res = self.req.post( url, data=data, json=postjson, verify=self.verify_ssl )
+                res = self.req.post( url, data=data, json=json, verify=self.verify_ssl, **kwargs )
                 if res.status_code != 200:
                     raise RuntimeError( f"Got response {res.status_code}: {res.text}" )
                 return res
