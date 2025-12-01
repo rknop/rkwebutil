@@ -370,6 +370,25 @@ nRVct/brmHSH0KXam2bLZFECAwEAAQ==
         conn.commit()
         conn.close()
 
+    def test_bad_username( self ):
+        for endpoint in [ "auth/getchallenge", "auth/getpasswordresetlink" ]:
+            # Ideally we would exhaustively test everything that's invalid, but, whatevs.  Test
+            #   some basic stuff that is likely to be used in XSS attacks.
+            res = requests.post( f"{self.url}/{endpoint}", json={ 'username': '<script>' }, verify=False )
+            assert res.status_code == 500
+            assert res.text == "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -."
+
+            res = requests.post( f"{self.url}/{endpoint}", json={ 'username': r'ab\c' }, verify=False )
+            assert res.status_code == 500
+            assert res.text == "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -."
+
+            res = requests.post( f"{self.url}/{endpoint}",
+                                 json={ 'username': ( 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                                                      '0123456789@._-' ) }, verify=False )
+            assert res.status_code == 500
+            assert res.text == "No such user abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@._-"
+
+
     @pytest.fixture
     def client( self, user ):
         client = rkAuthClient( self.url, 'test', 'test_password', verify=False )
@@ -411,3 +430,11 @@ class TestWebpyAuth(AuthTestBase):
 
 class TestrkAuthClientFlask(rkAuthClientTestBase):
     url = "https://flask:8080/"
+
+
+class TestrkAuthClientApacheFlask(rkAuthClientTestBase):
+    url = "https://apache:8084/"
+
+
+class TestrkAuthClientApacheWebpy(rkAuthClientTestBase):
+    url = "https://webpy:8082/ap.py/"

@@ -240,11 +240,21 @@ def _con_and_cursor():
     dbcon.close()
 
 
+_usernamere = re.compile( r"^[a-zA-Z0-9@_\-\.]+$" )
+def _validate_username( username ): # noqa: E302
+    global _usernamere
+    return _usernamere.search( username ) is not None
+
+
 def _get_user( userid=None, username=None, email=None, many_ok=False ):
     if ( ( userid is not None ) + ( username is not None ) + ( email is not None ) ) != 1:
         raise RuntimeError( "Specify exactly one of {userid,username,email}" )
 
-    q = "Select u.*"
+    if username is not None:
+        if not _validate_username( username ):
+            raise ValueError( "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -." )
+
+    q = "SELECT u.*"
     if RKAuthConfig.usegroups:
         q += ",array_agg(g.name) AS groups"
     q += f" FROM {RKAuthConfig.authuser_table} u "
@@ -357,6 +367,8 @@ def getchallenge():
 
         if 'username' not in data:
             return "Error, no username sent to server", 500
+        if not _validate_username( data['username'] ):
+            return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
         user = get_user_by_username( data['username'] )
         if user is None:
             return f"No such user {data['username']}", 500
@@ -425,6 +437,8 @@ def respondchallenge():
              ( 'response' not in flask.request.json ) ):
             return ( "Login error: username or challenge response missing "
                      "(you probably can't fix this, contact code maintainer)" ), 500
+        if not _validate_username( flask.request.json['username'] ):
+            return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
         if flask.request.json['username'] != flask.session['username']:
             return  ( f"Username {flask.request.json['username']} "
                       f"didn't match session username {flask.session['username']}; "
@@ -475,14 +489,16 @@ def getpasswordresetlink():
 
         if 'username' in flask.request.json and flask.request.json['username']:
             username = flask.request.json['username']
+            if not _validate_username( username ):
+                return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
             them = get_user_by_username( username )
             if them is None:
-                return f"username {username} not known", 500
+                return f"No such user {username}", 500
         elif 'email' in flask.request.json and flask.request.json['email']:
             email = flask.request.json['email']
             them = get_users_by_email( email )
             if them is None:
-                return f"email {email} not known", 500
+                return "requested email not known", 500
         else:
             return "Must include either 'username' or 'email' in POST data", 500
 

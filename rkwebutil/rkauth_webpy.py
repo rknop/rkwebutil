@@ -184,9 +184,20 @@ def _con_and_cursor():
     dbcon.close()
 
 
+
+_usernamere = re.compile( r"^[a-zA-Z0-9@_\-\.]+$" )
+def _validate_username( username ): # noqa: E302
+    global _usernamere
+    return _usernamere.search( username ) is not None
+
+
 def _get_user( userid=None, username=None, email=None, many_ok=False ):
     if ( ( userid is not None ) + ( username is not None ) + ( email is not None ) ) != 1:
         raise RuntimeError( "Specify exactly one of {userid,username,email}" )
+
+    if username is not None:
+        if not _validate_username( username ):
+            raise ValueError( "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -." )
 
     q = f"SELECT * FROM {RKAuthConfig.authuser_table} "
     subdict = {}
@@ -317,6 +328,8 @@ class GetAuthChallenge(HandlerBase):
             inputdata = json.loads( web.data().decode(encoding="utf-8") )
             if 'username' not in inputdata:
                 return 'No username sent to server', 500
+            if not _validate_username( inputdata['username'] ):
+                return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
             user = get_user_by_username( inputdata['username'] )
             if user is None:
                 return f"No such user {inputdata['username']}", 500
@@ -332,6 +345,7 @@ class GetAuthChallenge(HandlerBase):
             web.ctx.session.useruuid = user.id
             web.ctx.session.userdisplayname = user.displayname
             web.ctx.session.useremail = user.email
+            web.ctx.session.usergroups = user.groups if hasattr( user, 'groups' ) else []
             web.ctx.session.authuuid = tmpuuid
             retdata = { 'username': user.username,
                         'privkey': user.privkey['privkey'],
@@ -355,6 +369,8 @@ class RespondAuthChallenge(HandlerBase):
                  ( 'response' not in inputdata ) ):
                 return ( "Login error; username or challenge response missing "
                          "(you probably can't fix this, contact code maintainer)" ), 500
+            if not _validate_username( inputdata['username'] ):
+                return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
             if inputdata['username'] != web.ctx.session.username:
                 return ( f"Username {inputdata['username']} "
                          f"didn't match session username {web.ctx.session.username}; "
@@ -368,6 +384,7 @@ class RespondAuthChallenge(HandlerBase):
                      'useruuid': str( web.ctx.session.useruuid ),
                      'useremail': web.ctx.session.useremail,
                      'userdisplayname': web.ctx.session.userdisplayname,
+                     'usergroups': web.ctx.session.usergroups,
                     }
         except Exception as e:
             sys.stderr.write( f'{traceback.format_exc()}\n' )
@@ -386,9 +403,11 @@ class GetPasswordResetLink(HandlerBase):
             inputdata = json.loads( web.data().decode(encoding="utf-8") )
             if 'username' in inputdata:
                 username = inputdata['username']
+                if not _validate_username( username ):
+                    return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
                 them = get_user_by_username( username )
                 if them is None:
-                    return f"username {username} not known", 500
+                    return f"No such user {username}", 500
             elif 'email' in inputdata:
                 email = inputdata['email']
                 them = get_users_by_email( email )
@@ -565,6 +584,7 @@ class CheckIfAuth(HandlerBase):
                      'useruuid': str( web.ctx.session.useruuid ),
                      'useremail': web.ctx.session.useremail,
                      'userdisplayname': web.ctx.session.userdisplayname,
+                     'usergroups': web.ctx.session.usergroups,
                     }
         return { 'status': False }
 
