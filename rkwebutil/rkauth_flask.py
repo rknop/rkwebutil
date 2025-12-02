@@ -228,9 +228,10 @@ class RKAuthConfig:
 
 @contextlib.contextmanager
 def _con_and_cursor():
+    # Sometimes the client_encoding is necessary, sometime's it's not.  I haven't figured out the pattern yet.
     dbcon = psycopg.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
                              user=RKAuthConfig.db_user, password=RKAuthConfig.db_password,
-                             row_factory=psycopg.rows.dict_row )
+                             row_factory=psycopg.rows.dict_row, client_encoding='UTF8' )
     cursor = dbcon.cursor()
 
     yield dbcon, cursor
