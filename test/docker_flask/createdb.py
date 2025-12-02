@@ -1,5 +1,6 @@
 import os
-import psycopg2
+import psycopg
+
 
 def main():
     dbhost = os.getenv( 'DB_HOST' )
@@ -7,7 +8,7 @@ def main():
     dbuser = os.getenv( 'DB_USER' )
     dbpass = os.getenv( 'DB_PASS' )
     dbport = os.getenv( 'DB_PORT' )
-    conn = psycopg2.connect( host=dbhost, user=dbuser, password=dbpass, port=dbport, dbname=dbname )
+    conn = psycopg.connect( host=dbhost, user=dbuser, password=dbpass, port=dbport, dbname=dbname )
     cursor = conn.cursor()
 
     q = ( "CREATE TABLE authuser( id uuid NOT NULL, username text NOT NULL, displayname text NOT NULL, "
@@ -54,8 +55,8 @@ def main():
 
     conn.commit()
 
+
 # ======================================================================
 
 if __name__ == "__main__":
     main()
-

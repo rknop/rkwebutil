@@ -560,12 +560,13 @@ rkWebUtil.colorIntToCSSColor = function( colint ) {
 //
 // To use:
 //   * Instantiate the object, passing the stuff desribed in "to create".
-//   * Access the created table with the table property of the object.
-//     This is the thing you stick in your document.
-//   * (Possibly, this may be a bad idea.)  Access the sorted rows with
-//     the tablerows property of the object.
 //
-// To create:
+//   * Add the "table" property of the object to your document.  (It's a
+//     table document element.)  You can also add things to this
+//     property's classList if you want.
+//
+// To create: new rkwebutil.SortableTable( data, fields, rowrenderer, props );
+//
 //   * data : A data array that is in one of two formats:
 //       * A list of dicts.  Each dict has one entry that is the value for each
 //             column in one row.  All dicts in the list must have the same fields.
@@ -575,90 +576,124 @@ rkWebUtil.colorIntToCSSColor = function( colint ) {
 //             All lists must have the same length.  Must set the "dictoflists" field
 //             of props to true in this case.
 //
-//   * rowrenderer : A function that, given data and either a row dict (in the case where
-//     data is a list of dicts) or an index (in the case where data is a dict of lists),
-//     returns a tr document element that has that row of the table.
+//   * fields : An array of strings, the attributes of data that
+//     correspond to the columns.  If props.dictoflists is true, then
+//     these are attributes of data; if props.dictoflists is false, then
+//     these are the attributes of each element of data (which is itself
+//     a list).
 //
-//     This rowrenderer will be called exactly once during objection creation for each row.
-//     As such, it's safe for you to do things like cache the rows created yourself inside
-//     this function, if for some reason you want to poke into the table and edit the rows
+//   * rowrenderer : A function that renders one table row.  Takes as a
+//     arguments ( data, fields, i ).  data is the same as the data that
+//     was passed to the SortableTable constructor.  fields is the same
+//     as was passed to the SortableTable constructor.  i depends on the
+//     format of data.  If data is a list of dicts, then i is a
+//     dictionary, one row of data (and you can probably ignore data).
+//     If data is a dict of lists, then i is an integer, an index into
+//     each list in data.
+//
+//     It must return a tr document element, which should have one
+//     td for each thing in fields.  If you plan ahead, you can
+//     ignore fields and just stuff the tds in order, knowing
+//     a priori what fields is.  Or, if you like doing extra work
+//     and are a good person, you can parse fields and do things that way.
+//
+//     This rowrenderer will be called exactly once during objection
+//     creation for each row.  As such, it's safe for you to do things
+//     like cache the rows created yourself inside this function, if for
+//     some reason you want to poke into the table and edit the rows
 //     later.
 //
-//   * fields : An array of strings, the things to show in the columns of the header row.
-//     For the table to make sense, rowrenderer must render each row with the same number
-//     of columns as there are elements in fields, and the columns of each row must be
-//     in the order given by fields.
-//
 //   * props : optional additional arugments in a structure, can include:
+//
 //       * dictoflists: True if data is a dict of lists; otherwise, the code
 //         will assume that data is a list of dicts.
-//       * fieldmap : a map of column header -> field name.  Field name is either
-//         a key of data (if data is a dict of lists), or a key of each element.
-//         of data (if data is a list of dicts).
+//
+//       * hdrs : a map of field name (from fields) → column header.
+//         The latter is what gets rendered in the header row of the
+//         table.  If not given, defaults to the property names.  Any
+//         property names missing from this table will have the property
+//         name rendered as the header.
+//
 //       * initsort : list of strings.  A description of how the data is initially sorted.
 //            this is *only* used to render the table headers, the rows
 //            is not sorted by this class when the table is first displayed.
 //            This is a list of fields; each element of the list is a string
 //            that should also be an element of fields, only starting with '+'
 //            or '-' for incrementing or decrementing respectively.
+//
 //       * nosortfields : a list of fields (column header strings) that
 //         the user should *not* be able to sort by.  By default, the
 //         user can sort by all fields.
+//
 //       * tableclasses : list: CSS class names to assign to the table as a whole
+//
 //       * colorclasses : a list of CSS class names, which are intended to hold
 //         background color styling.
+//
 //       * colorlength : The first colorlength rows will be given the first class
 //         in colorlcasses.  The second colorlength rows the second, the third etc.,
 //         wrapping back to the first once the list is exhausted.  Used for
 //         things like alternating grey and white backgrounds every three rows.
 //
+//       * headercallback : Optional.  A fucntion which is called after
+//         the table header is rendered but before any rows are
+//         rendered.  This will be called when the SortableTable object
+//         is first instantiated, and every time the table is sorted.
+//         Arguments are (table, ths), where table is the table document
+//         element, and ths is a list of existing table headers.
+//
 // Depends on there being a "link" css class
 
 rkWebUtil.SortableTable = class
 {
-    constructor( data, rowrenderer=null, fields=null, inprops )
+    constructor( data, fields=null, rowrenderer=null, inprops )
     {
         let self = this;
 
-        var props = { 'fieldmap': null,
-                      'dictoflists': true,
+        var props = { 'dictoflists': true,
+                      'hdrs': {},
                       'nosortfields': [],
                       'initsort': [],
                       'tableclasses': [],
                       'colorclasses': [],
-                      'colorlength': 3 };
+                      'colorlength': 3,
+                      'headercallback': null,
+                    }
         Object.assign( props, inprops )
 
         if ( data == null ) {
             alert( "data cannot be null" );
             return
         }
-        if ( rowrenderer == null ) {
-            alert( "rowrenderer cannot be null" );
-            return;
-        }
         if ( fields == null ) {
             alert( "fields cannot be null" );
             return
         }
-        this.fields = [...fields];
-        if ( props.fieldmap == null ) {
-            props.fieldmap = {};
-            for ( let f of fields ) {
-                props.fieldmap[f] = f;
-            }
+        if ( rowrenderer == null ) {
+            alert( "rowrenderer cannot be null" );
+            return;
         }
+
+        this.fields = [...fields];
+        this.hdrs = {};
+        for ( let f of this.fields ) {
+            if ( props.hdrs.hasOwnProperty( f ) )
+                this.hdrs[ f ] = props.hdrs[ f ];
+            else
+                this.hdrs[ f ] = f;
+        }
+
         this.data = data;
-        this.fieldmap = props.fieldmap;
         this.dictoflists = props.dictoflists;
         this.nosortfields = props.nosortfields;
         this.sortfields = [...props.initsort];
         this.tableclasses = [...props.tableclasses];
         this.colorclasses = [...props.colorclasses];
         this.colorlength = props.colorlength;
+        this.headercallback = props.headercallback;
 
         this.table = rkWebUtil.elemaker( "table", null, { "classes": this.tableclasses } );
-        this.addtableheader();
+        this.ths = this.addtableheader();
 
         this.tablerows = [];
         let colordex = 0;
@@ -672,12 +707,7 @@ rkWebUtil.SortableTable = class
             }
             countdown -= 1;
 
-            let tr;
-            if ( self.dictoflists ) {
-                tr = rowrenderer( self.data, i );
-            } else {
-                tr = rowrenderer( i );
-            }
+            let tr = rowrenderer( self.data, self.fields, i );
             if ( colordex < self.colorclasses.length ) {
                 tr.classList.add( self.colorclasses[colordex] );
             }
@@ -686,14 +716,10 @@ rkWebUtil.SortableTable = class
         }
 
         if ( this.dictoflists ) {
-            for ( let i in data[this.fieldmap[fields[0]]] ) {
-                dorow( i );
-            }
+            for ( let i in this.data[ this.fields[0] ] ) dorow( i );
         }
         else {
-            for ( let i of data ) {
-                dorow( i );
-            }
+            for ( let i of data ) dorow( i );
         }
     }
 
@@ -701,12 +727,13 @@ rkWebUtil.SortableTable = class
     {
         let self = this;
         let subscripts = [ '₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉' ];
+        let ths = []
 
         let tr = rkWebUtil.elemaker( "tr", this.table );
         for ( let field of this.fields ) {
             let th = rkWebUtil.elemaker( "th", tr );
             if ( this.nosortfields.indexOf( field ) >= 0 ) {
-                th.appendChild( document.createTextNode( field ) )
+                rkWebUtil.elemaker( "text", th, { "text": this.hdrs[field] } );
             } else {
                 let clickfunc = (e) => {
                     if ( self.sortfields.indexOf( '+' + field ) >= 0 )
@@ -714,7 +741,7 @@ rkWebUtil.SortableTable = class
                     else
                         self.resort_rows( field, true );
                 };
-                let span = rkWebUtil.elemaker( "span", th, { "text": field,
+                let span = rkWebUtil.elemaker( "span", th, { "text": this.hdrs[field],
                                                              "classes": [ "link" ],
                                                              "click": clickfunc } );
                 let sortdex = self.sortfields.indexOf( '+' + field );
@@ -732,7 +759,10 @@ rkWebUtil.SortableTable = class
                     th.appendChild( document.createTextNode( '▿' + subscripts[sortdex] ) )
                 }
             }
+            ths.push( th );
         }
+        if ( this.headercallback != null ) this.headercallback( this.table, ths );
+        return ths;
     }
 
     resort_rows( field, increasing )
@@ -745,14 +775,12 @@ rkWebUtil.SortableTable = class
                 let f = field.substring(1);
                 let aval, bval;
                 if ( self.dictoflists ) {
-                    aval = self.data[ self.fieldmap[f] ][a];
-                    bval = self.data[ self.fieldmap[f] ][b];
+                    aval = self.data[f][a];
+                    bval = self.data[f][b];
+                } else {
+                    aval = self.data[a][f];
+                    bval = self.data[b][f];
                 }
-                else {
-                    aval = self.data[a][ self.fieldmap[f] ];
-                    bval = self.data[b][ self.fieldmap[f] ];
-                }
-
                 if ( aval  > bval ) {
                     if ( incr )
                         return 1;
@@ -785,7 +813,7 @@ rkWebUtil.SortableTable = class
 
         let dexen = null;
         if ( self.dictoflists ) {
-            dexen = Array.from( Array( this.data[ this.fieldmap[ this.fields[0] ] ].length ).keys() );
+            dexen = Array.from( Array( this.data[ this.fields[0] ].length ).keys() );
         }
         else {
             dexen = Array.from( Object.keys( this.data ) );
@@ -793,7 +821,7 @@ rkWebUtil.SortableTable = class
         dexen.sort( sorter );
 
         rkWebUtil.wipeDiv( this.table );
-        this.addtableheader();
+        this.ths = this.addtableheader();
 
         let colordex = 0;
         let countdown = this.colorlength;

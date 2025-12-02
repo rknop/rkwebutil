@@ -1,5 +1,9 @@
 **~
 __pycache__
 
-test/.env
+build
+dist
+venv
+rkwebutil.egg-info
+
 

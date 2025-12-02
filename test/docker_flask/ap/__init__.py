@@ -1,9 +1,9 @@
-import pathlib
 import flask
 import flask_session
 import logging
 
-from . import rkauth_flask
+from rkwebutil import rkauth_flask
+
 
 def create_app():
     app = flask.Flask(  __name__ )
@@ -19,7 +19,7 @@ def create_app():
         SESSION_FILE_THRESHOLD=1000,
     )
 
-    server_session = flask_session.Session( app )
+    _server_session = flask_session.Session( app )
 
     rkauth_flask.RKAuthConfig.setdbparams(
         db_host='postgres',

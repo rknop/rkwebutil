@@ -1,0 +1,172 @@
+# This is the docker compose file used for tests
+
+# TODO : right now we have to build all the docker images every time
+#   because the code is baked into the images with pip install -e .
+#   Think about that.
+
+services:
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+        - "8025:8025"
+
+  postgres:
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_postgres:${DOCKER_VERSION:-test20251201}
+    build:
+      context: test/docker_postgres
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    healthcheck:
+      test: netcat -w 1 localhost 5432 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  createdb:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_flask:${DOCKER_VERSION:-test20251201}
+    build:
+      context: .
+      dockerfile: ./test/docker_flask/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    entrypoint:
+      - /bin/bash
+      - -c
+      - python3 /usr/src/createdb.py
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  flask:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8080 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_flask:${DOCKER_VERSION:-test20251201}
+    build:
+      context: .
+      dockerfile: test/docker_flask/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8080:8080"
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  webpy:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8082 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_webpy:${DOCKER_VERSION:-test20251201}
+    build:
+      context: .
+      dockerfile: test/docker_webpy/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8082:8082"
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  apache:
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: netcat -w 1 localhost 8084 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    image: ${DOCKER_ACHIVE:-ghcr.io/rknop}/rkwebutil_test_apache:${DOCKER_VERSION:-test20251201}
+    build:
+      context: .
+      dockerfile: test/docker_apache/Dockerfile
+      target: webserver
+    environment:
+      DB_NAME: test_rkwebutil
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: fragile
+      DB_PORT: 5432
+    ports:
+      - "8084:8084"
+    user: ${USERID:-0}:${GROUPID:-0}
+
+
+  shell:
+    depends_on:
+      postgres:
+        condition: service_started
+      flask:
+        condition: service_healthy
+      webpy:
+        condition: service_healthy
+      apache:
+        condition: service_healthy
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251201}
+    build:
+      context: test/docker_test
+    volumes:
+      - type: bind
+        source: ./
+        target: /rkwebutil_src
+    working_dir: /rkwebutil_src
+    entrypoint: [ "tail", "-f", "/etc/issue" ]
+    user: ${USERID:-0}:${GROUPID:-0}
+
+  runtests:
+    depends_on:
+      postgres:
+        condition: service_started
+      flask:
+        condition: service_healthy
+      webpy:
+        condition: service_healthy
+      apache:
+        condition: service_healthy
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251201}
+    build:
+      context: test/docker_test
+    volumes:
+      - type: bind
+        source: ./
+        target: /rkwebutil_src
+    working_dir: /rkwebutil_src
+    entrypoint: >
+      bash -c "pip install -e .[test] &&
+               cd test &&
+               pytest -v"
+    user: ${USERID:-0}:${GROUPID:-0}

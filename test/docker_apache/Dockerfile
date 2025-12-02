@@ -1,6 +1,6 @@
-# This dockerfile must be run from the parent directory of the Dockerfile's directory
+# This dockerfile must be run from the top of the rkwebutil checkout
 
-FROM rknop/devuan-daedalus-rknop AS base
+FROM debian:bookworm AS base
 LABEL maintainer="Rob Knop <rknop@pobox.com>"
 
 SHELL ["/bin/bash", "-c"]
@@ -11,11 +11,18 @@ ENV TZ="UTC"
 RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get -y install -y \
-       python3 tmux netcat-openbsd curl elinks postgresql-client make \
+       python3 locales tmux less netcat-openbsd curl elinks postgresql-client make \
        apache2 apache2-bin libapache2-mod-wsgi-py3 \
     && apt-get -y autoremove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN cat /etc/locale.gen | perl -pe 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' > /etc/locale.gen.new \
+    && mv /etc/locale.gen.new /etc/locale.gen
+RUN locale-gen en_US.utf8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
 
 RUN ln -s /usr/bin/python3 /usr/bin/python
 ENV LESS=-XLRi
@@ -33,12 +40,15 @@ RUN source /venv/bin/activate \
     && pip --no-cache install \
        flask \
        flask-session \
-       flask-sock \
-       psycopg2 \
-       pycryptodome \
-       python-dateutil \
-       pytz \
-       requests
+       psycopg \
+       setuptools \
+       setuptools-scm
+
+RUN mkdir -p /usr/src/rkwebutil
+WORKDIR /usr/src/rkwebutil
+COPY . /usr/src/rkwebutil
+RUN source /venv/bin/activate && \
+    pip install .
 
 # ======================================================================
 FROM base AS webserver
@@ -46,15 +56,15 @@ FROM base AS webserver
 COPY --from=build /venv/ /venv/
 ENV PATH=/venv/bin:$PATH
 
-COPY docker_apache/key.pem /usr/src/key.pem
-COPY docker_apache/cert.pem /usr/src/cert.pem
+COPY test/docker_flask/key.pem /usr/src/key.pem
+COPY test/docker_flask/cert.pem /usr/src/cert.pem
 
 # Set up apache
 RUN ln -s ../mods-available/socache_shmcb.load /etc/apache2/mods-enabled/socache_shmcb.load
 RUN ln -s ../mods-available/ssl.load /etc/apache2/mods-enabled/ssl.load
 RUN ln -s ../mods-available/ssl.conf /etc/apache2/mods-enabled/ssl.conf
 RUN echo "Listen 8084" > /etc/apache2/ports.conf
-COPY docker_apache/000-default.conf /etc/apache2/sites-available
+COPY test/docker_apache/000-default.conf /etc/apache2/sites-available
 
 # Sessions directory for flask
 RUN mkdir /sessions
@@ -66,5 +76,13 @@ RUN chmod a+rwx /sessions
 RUN chmod -R a+rwx /var/www/html
 RUN chmod -R a+rwx /var/log/apache2
 RUN chmod -R a+rwx /var/run/apache2
+
+RUN mkdir /flask
+RUN chmod a+rx /flask
+COPY test/docker_apache/server.py /flask/
+COPY test/docker_flask/ap /flask/ap
+RUN ln -s /flask/ap/static /flask/static
+RUN ln -s /flask/ap/tempaltes /flask/templates
+RUN cp -p /venv/lib/python3.11/site-packages/rkwebutil/static/* /flask/static/
 
 ENTRYPOINT [ "apachectl", "-D", "FOREGROUND", "-D", "APACHE_CONFDIR=/etc/apache2" ]

@@ -6,13 +6,13 @@
 
 
 import sys
-import os
 import pathlib
 import pytest
 
 _rundir = pathlib.Path(__file__).parent
 sys.path.insert(0, '/test_install/html' )
-import config
+from rkwebutil import config
+
 
 # A note about pytest: Things aren't completely sandboxed.  When I call
 # config.Config.get(), it selts Config._default, and that carries over
@@ -21,7 +21,7 @@ import config
 
 class TestConfig:
     def test_no_default( self ):
-        assert config.Config._default == None
+        assert config.Config._default is None
 
     # @pytest.mark.skipif( os.getenv("CURVEBALL_CONFIG") is None, reason="Set CURVEBALL_CONFIG to test this" )
     # def test_default_default( self ):
@@ -29,7 +29,7 @@ class TestConfig:
     #     assert cfg._path == pathlib.Path( f'/curveball/{os.getenv("CURVEBALL_CONFIG")}.yaml' )
 
     def test_set_default( self ):
-        cfg = config.Config.get( _rundir / 'test.yaml', setdefault=True )
+        _cfg = config.Config.get( _rundir / 'test.yaml', setdefault=True )
         assert config.Config._default == f'{ (_rundir / "test.yaml").resolve() }'
 
     @pytest.fixture(scope='class')
@@ -141,4 +141,3 @@ class TestConfig:
         assert cfg.value('clonetest2') == 'orig'
         assert newconfig.value('clonetest1') == 'orig'
         assert newconfig.value('clonetest2') == 'manuallyset'
-

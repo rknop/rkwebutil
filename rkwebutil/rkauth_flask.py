@@ -137,10 +137,9 @@ import ssl
 from email.message import EmailMessage
 from email.policy import EmailPolicy
 
-import psycopg2
-import psycopg2.extras
-import psycopg2.extensions
-psycopg2.extensions.register_adapter( dict, psycopg2.extras.Json )
+import psycopg
+import psycopg.rows
+import psycopg.types.json
 
 import flask
 import Crypto.PublicKey.RSA
@@ -152,6 +151,7 @@ if str(_dir) not in sys.path:
     sys.path.append( str(_dir) )
 
 bp = flask.Blueprint( 'auth', __name__, url_prefix='/auth' )
+
 
 class RKAuthConfig:
     """Global rkauth config.
@@ -225,11 +225,13 @@ class RKAuthConfig:
         if not re.search( '^[a-zA-Z0-9_]+$', cls.passwordlink_table ):
             raise ValueError( f"Invalid passwordlink table name {cls.passwordlink_table}" )
 
+
 @contextlib.contextmanager
 def _con_and_cursor():
-    dbcon = psycopg2.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
-                              user=RKAuthConfig.db_user, password=RKAuthConfig.db_password,
-                              cursor_factory=psycopg2.extras.NamedTupleCursor )
+    # Sometimes the client_encoding is necessary, sometime's it's not.  I haven't figured out the pattern yet.
+    dbcon = psycopg.connect( host=RKAuthConfig.db_host, port=RKAuthConfig.db_port, dbname=RKAuthConfig.db_name,
+                             user=RKAuthConfig.db_user, password=RKAuthConfig.db_password,
+                             row_factory=psycopg.rows.dict_row, client_encoding='UTF8' )
     cursor = dbcon.cursor()
 
     yield dbcon, cursor
@@ -239,11 +241,21 @@ def _con_and_cursor():
     dbcon.close()
 
 
+_usernamere = re.compile( r"^[a-zA-Z0-9@_\-\.]+$" )
+def _validate_username( username ): # noqa: E302
+    global _usernamere
+    return _usernamere.search( username ) is not None
+
+
 def _get_user( userid=None, username=None, email=None, many_ok=False ):
     if ( ( userid is not None ) + ( username is not None ) + ( email is not None ) ) != 1:
         raise RuntimeError( "Specify exactly one of {userid,username,email}" )
 
-    q = f"SELECT u.*"
+    if username is not None:
+        if not _validate_username( username ):
+            raise ValueError( "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -." )
+
+    q = "SELECT u.*"
     if RKAuthConfig.usegroups:
         q += ",array_agg(g.name) AS groups"
     q += f" FROM {RKAuthConfig.authuser_table} u "
@@ -267,7 +279,7 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
         cursor = con_and_cursor[1]
         cursor.execute( q, subdict )
         rows = cursor.fetchall()
-        rows = [ SimpleNamespace( **r._asdict() ) for r in rows ]
+        rows = [ SimpleNamespace( **r ) for r in rows ]
         if RKAuthConfig.usegroups:
             for row in rows:
                 if row.groups == [None]:
@@ -281,18 +293,22 @@ def _get_user( userid=None, username=None, email=None, many_ok=False ):
         else:
             return rows[0]
 
+
 def get_user_by_uuid( userid ):
     return _get_user( userid=userid )
+
 
 def get_user_by_username( username ):
     return _get_user( username=username )
 
+
 def get_users_by_email( email ):
     return _get_user( email=email, many_ok=True )
 
+
 def create_password_link( useruuid ):
     PasswordLink = namedtuple( 'passwordlink', [ 'id', 'userid', 'expires' ] )
-    expires = datetime.datetime.now( datetime.timezone.utc ) + datetime.timedelta( hours=1 )
+    expires = datetime.datetime.now( datetime.UTC ) + datetime.timedelta( hours=1 )
     pwlink = PasswordLink( uuid.uuid4(), useruuid, expires )
 
     with _con_and_cursor() as con_and_cursor:
@@ -304,6 +320,7 @@ def create_password_link( useruuid ):
 
     return pwlink
 
+
 def get_password_link( linkid ):
     with _con_and_cursor() as con_and_cursor:
         cursor = con_and_cursor[1]
@@ -312,7 +329,7 @@ def get_password_link( linkid ):
         if len( rows ) == 0:
             return None
         elif len( rows ) > 1:
-            raise RuntimeError( f"Multiple password links with id {linkdi}, this should never happen" )
+            raise RuntimeError( f"Multiple password links with id {linkid}, this should never happen" )
 
         return rows[0]
 
@@ -349,8 +366,10 @@ def getchallenge():
             return "Error, /auth/getchallenge was expecting application/json", 500
         data = flask.request.json
 
-        if not 'username' in data:
+        if 'username' not in data:
             return "Error, no username sent to server", 500
+        if not _validate_username( data['username'] ):
+            return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
         user = get_user_by_username( data['username'] )
         if user is None:
             return f"No such user {data['username']}", 500
@@ -415,12 +434,14 @@ def respondchallenge():
     try:
         if not flask.request.is_json:
             return "auth/respondchallenge was expecting application/json", 500
-        if ( ( not 'username' in flask.request.json ) or
-             ( not 'response' in flask.request.json ) ):
+        if ( ( 'username' not in flask.request.json ) or
+             ( 'response' not in flask.request.json ) ):
             return ( "Login error: username or challenge response missing "
                      "(you probably can't fix this, contact code maintainer)" ), 500
+        if not _validate_username( flask.request.json['username'] ):
+            return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
         if flask.request.json['username'] != flask.session['username']:
-            return  ( f"Username {fask.request.json['username']} "
+            return  ( f"Username {flask.request.json['username']} "
                       f"didn't match session username {flask.session['username']}; "
                       f"try logging out and logging back in." ), 500
         if flask.session["authuuid"] != flask.request.json['response']:
@@ -467,16 +488,18 @@ def getpasswordresetlink():
         if not flask.request.is_json:
             return "/auth/getpasswordresetlink was expecting application/json", 500
 
-        if 'username' in flask.request.json:
+        if 'username' in flask.request.json and flask.request.json['username']:
             username = flask.request.json['username']
+            if not _validate_username( username ):
+                return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
             them = get_user_by_username( username )
             if them is None:
-                return f"username {username} not known", 500
-        elif 'email' in flask.request.json:
+                return f"No such user {username}", 500
+        elif 'email' in flask.request.json and flask.request.json['email']:
             email = flask.request.json['email']
             them = get_users_by_email( email )
             if them is None:
-                return f"email {email} not known", 500
+                return "requested email not known", 500
         else:
             return "Must include either 'username' or 'email' in POST data", 500
 
@@ -527,7 +550,12 @@ def getpasswordresetlink():
                             f"Here is the link; cut and paste it into your browser:\n"
                             f"\n"
                             f"{webap_url}/resetpassword?uuid={str(pwlink.id)}" )
-            smtp.send_message( msg, RKAuthConfig.email_from, to_addrs=user.email )
+            try:
+                smtp.send_message( msg, RKAuthConfig.email_from, to_addrs=user.email )
+            except Exception as ex:
+                flask.current_app.logger.exception( f"Exception sending mail from {RKAuthConfig.email_from} "
+                                                    f"to {user.email} with message {msg} : {ex}" )
+                raise
             smtp.quit()
             if len(sentto) > 0:
                 sentto += " "
@@ -536,6 +564,7 @@ def getpasswordresetlink():
     except Exception as e:
         flask.current_app.logger.exception( "Exception in getpasswordresetlink" )
         return f"Exception in getpasswordresetlink: {str(e)}", 500
+
 
 @bp.route( '/resetpassword', methods=['GET'] )
 def resetpassword():
@@ -549,7 +578,7 @@ def resetpassword():
     """
     response = "<!DOCTYPE html>\n"
     response += "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
-    response += f"<title>Password Reset</title>\n"
+    response += "<title>Password Reset</title>\n"
 
     webapdirurl = str( pathlib.Path( flask.request.path ).parent.parent )
     if webapdirurl[-1] != '/':
@@ -557,10 +586,10 @@ def resetpassword():
     flask.current_app.logger.debug( f"In ResetPassword, webapdirurl is {webapdirurl}\n" )
     response += "<script src=\"" + webapdirurl + "static/resetpasswd_start.js\" type=\"module\"></script>\n"
     response += "</head>\n<body>\n"
-    response += f"<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n";
+    response += "<h1>Reset Password</h1>\n<p><b>ROB Todo: make this header better</b></p>\n"
 
     try:
-        if not 'uuid' in flask.request.args:
+        if 'uuid' not in flask.request.args:
             response += "<p>Malformed password reset URL.</p>\n</body></html>"
             return flask.make_response( response )
 
@@ -568,10 +597,10 @@ def resetpassword():
         if pwlink is None:
             response += "<p>Invalid password reset URL.</p>\n</body></html>"
             return flask.make_response( response )
-        if pwlink.expires < datetime.datetime.now(pytz.utc):
+        if pwlink['expires'] < datetime.datetime.now(pytz.utc):
             response += "<p>Password reset link has expired.</p>\n</body></html>"
             return flask.make_response( response )
-        user = get_user_by_uuid( pwlink.userid )
+        user = get_user_by_uuid( pwlink['userid'] )
 
         response += f"<h2>Reset password for {user.username}</h2>\n"
         response += "<div id=\"authdiv\">"
@@ -589,7 +618,7 @@ def resetpassword():
         response += "</td></tr>\n</table>\n"
         response += "</div>\n"
         response += ( f"<input type=\"hidden\" name=\"linkuuid\" id=\"resetpasswd_linkid\" "
-                      f"value=\"{str(pwlink.id)}\">" )
+                      f"value=\"{str(pwlink['id'])}\">" )
         response += "</body>\n</html>\n"
         return flask.make_response( response )
     except Exception as e:
@@ -635,7 +664,7 @@ def changepassword():
         if not flask.request.is_json:
             return "Error, /auth/changepassword was expecting application/json", 500
         for key in [ "passwordlinkid", "publickey", "privatekey", "salt", "iv" ]:
-            if not key in flask.request.json:
+            if key not in flask.request.json:
                 return f"Error, call to changepassword without {key}", 500
 
         pwlink = get_password_link( flask.request.json['passwordlinkid'] )
@@ -644,19 +673,22 @@ def changepassword():
 
         with _con_and_cursor() as con_and_cursor:
             con, cursor = con_and_cursor
-            cursor.execute( f"SELECT * FROM {RKAuthConfig.authuser_table} WHERE id=%(uuid)s", {'uuid': pwlink.userid} )
+            cursor.execute( f"SELECT * FROM {RKAuthConfig.authuser_table} WHERE id=%(uuid)s",
+                            {'uuid': pwlink['userid']} )
             rows = cursor.fetchall()
             if len(rows) == 0:
-                return "Unknown user id {pwlink.userid}; this shouldn't happen", 500
+                return f"Unknown user id {pwlink['userid']}; this shouldn't happen", 500
             user = rows[0]
 
             cursor.execute( f"UPDATE {RKAuthConfig.authuser_table} SET pubkey=%(pubkey)s,privkey=%(privkey)s "
                             f"WHERE id=%(uuid)s",
-                            { 'uuid': user.id,
+                            { 'uuid': user['id'],
                               'pubkey': flask.request.json['publickey'],
-                              'privkey': { 'privkey': flask.request.json['privatekey'],
-                                           'salt': flask.request.json['salt'],
-                                           'iv': flask.request.json['iv'] } } )
+                              'privkey': psycopg.types.json.Jsonb(
+                                  { 'privkey': flask.request.json['privatekey'],
+                                    'salt': flask.request.json['salt'],
+                                    'iv': flask.request.json['iv'] } ),
+                             } )
             cursor.execute( f"DELETE FROM {RKAuthConfig.passwordlink_table} WHERE id=%(uuid)s",
                             { 'uuid': flask.request.json['passwordlinkid'] } )
             con.commit()
@@ -695,7 +727,7 @@ def isauth():
                                 'usergroups': flask.session["usergroups"],
                                } )
     else:
-        return flask.jsonify( { 'status': False } );
+        return flask.jsonify( { 'status': False } )
 
 
 @bp.route( '/logout', methods=['GET','POST'] )
