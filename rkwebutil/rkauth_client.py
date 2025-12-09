@@ -189,12 +189,17 @@ class rkAuthClient:
               **kwargs ):
         """Send a POST query to the server.
 
-        Logs in if necessary.  Retries several times if there is an
-        error, in an attempt to work around temporary internet
-        connectivity glithces.  This does mean that if there is a
-        legitimate failure (like an error return), it will take some
-        time (by default, ~10 seconds) for the failure to actually return
-        as it sleeps and retries.
+        Logs on if necessary.
+
+        If the HTTP return status is 200, returns the response.
+
+        If the HTTP return status is 409 ("Conflict") or 422
+        ("Unprocessable Content"), raises an exception with the body of
+        the response (assuming it's text) as the text of the exception.
+
+        Otherwise, retries several times if there is an error, in an
+        attempt to work around temporary internet connectivity glithces.
+
 
         If you're expecting a json-encoded response, you may want to use
         send().
@@ -267,6 +272,11 @@ class rkAuthClient:
                     raise RuntimeError( f"Got response {res.status_code}: {res.text}" )
                 return res
             except Exception as ex:
+                if res.status_code in ( 409, 422 ):
+                    # This is what the server should return to indicate an actual error in the
+                    #   query.  In that case, we don't want to retry.  TODO: are there
+                    #   other 4xx's that we should immediately thrown an exception on?
+                    raise RuntimeError( f"Error response from server: {res.text}" )
                 curtry += 1
                 t = time.perf_counter()
                 msg = ( f"Failed to connect to {url} after {curtry} {'tries' if curtry!=1 else 'try'} "
@@ -283,7 +293,7 @@ class rkAuthClient:
                 time.sleep( tosleep )
                 meansleep *= sleepfac
 
-        raise RuntimeError( "This shouild never happen.")
+        raise RuntimeError( "This should never happen.")
 
 
     def send( self, url, *args, **kwargs ):

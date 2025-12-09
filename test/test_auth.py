@@ -431,6 +431,39 @@ class TestWebpyAuth(AuthTestBase):
 class TestrkAuthClientFlask(rkAuthClientTestBase):
     url = "https://flask:8080/"
 
+    # TODO : move this into rkAuthClientTestBase when documentatoin for web.py is back
+    #   up and we can put the necessary server endpoint in the test server code there.
+
+    def test_error_return( self, client ):
+        # Takes a few seconds to fail because of retries
+
+        t0 = time.perf_counter()
+        with pytest.raises( RuntimeError, match="Failed to connect.*response 404" ):
+            res = client.post( '/isit42' )
+        assert time.perf_counter() - t0 > 1.
+
+        res = client.post( '/isit42/42' )
+        assert res.status_code == 200
+        assert res.headers['Content-Type'] == 'application/json'
+        assert res.json()['status'] == "ok"
+        assert res.json()['message'] == "Congratulations.  Here's your towel."
+
+        # Retries shouldn't happen, so this should fail fast
+        t0 = time.perf_counter()
+        with pytest.raises( RuntimeError, match=r"Error response from server: You didn't even give me an integer" ):
+            res = client.post( '/isit42/kitten' )
+        assert time.perf_counter() - t0 < 0.5
+
+        t0 = time.perf_counter()
+        with pytest.raises( RuntimeError, match=r"Error response from server: Only 42 accepted, 0 is too low." ):
+            res = client.post( '/isit42/0' )
+        assert time.perf_counter() - t0 < 0.5
+
+        t0 = time.perf_counter()
+        with pytest.raises( RuntimeError, match=r"Error response from server: Only 42 accepted, 128 is too high." ):
+            res = client.post( '/isit42/128' )
+        assert time.perf_counter() - t0 < 0.5
+
 
 class TestrkAuthClientApacheFlask(rkAuthClientTestBase):
     url = "https://apache:8084/"
