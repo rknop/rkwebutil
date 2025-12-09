@@ -11,7 +11,7 @@ services:
         - "8025:8025"
 
   postgres:
-    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_postgres:${DOCKER_VERSION:-test20251201}
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_postgres:${DOCKER_VERSION:-test20251209}
     build:
       context: test/docker_postgres
     environment:
@@ -30,7 +30,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_flask:${DOCKER_VERSION:-test20251201}
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_flask:${DOCKER_VERSION:-test20251209}
     build:
       context: .
       dockerfile: ./test/docker_flask/Dockerfile
@@ -58,7 +58,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_flask:${DOCKER_VERSION:-test20251201}
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_flask:${DOCKER_VERSION:-test20251209}
     build:
       context: .
       dockerfile: test/docker_flask/Dockerfile
@@ -84,7 +84,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_webpy:${DOCKER_VERSION:-test20251201}
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test_webpy:${DOCKER_VERSION:-test20251209}
     build:
       context: .
       dockerfile: test/docker_webpy/Dockerfile
@@ -110,7 +110,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
-    image: ${DOCKER_ACHIVE:-ghcr.io/rknop}/rkwebutil_test_apache:${DOCKER_VERSION:-test20251201}
+    image: ${DOCKER_ACHIVE:-ghcr.io/rknop}/rkwebutil_test_apache:${DOCKER_VERSION:-test20251209}
     build:
       context: .
       dockerfile: test/docker_apache/Dockerfile
@@ -136,7 +136,7 @@ services:
         condition: service_healthy
       apache:
         condition: service_healthy
-    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251201}
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251209}
     build:
       context: test/docker_test
     volumes:
@@ -157,7 +157,7 @@ services:
         condition: service_healthy
       apache:
         condition: service_healthy
-    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251201}
+    image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251209}
     build:
       context: test/docker_test
     volumes:

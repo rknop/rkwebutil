@@ -52,4 +52,20 @@ def create_app():
     def tconv():
         return flask.render_template( 'tconv.html' )
 
+    @app.route('/isit42/<fortytwo>', methods=['GET', 'POST'] )
+    def isit42( fortytwo ):
+        try:
+            fortytwo = int( fortytwo )
+        except Exception:
+            return "You didn't even give me an integer", 422
+
+        if fortytwo == 42:
+            return { "status": "ok",
+                     "message": "Congratulations.  Here's your towel." }
+        elif fortytwo > 42:
+            return f"Only 42 accepted, {fortytwo} is too high.", 409
+        else:
+            return f"Only 42 accepted, {fortytwo} is too low.", 422
+
+
     return app
