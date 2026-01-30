@@ -18,6 +18,7 @@ exampleap.prototype.init = function() {
 
     this.statusdiv = document.getElementById( "status-div" );
     this.maindiv = document.getElementById( "main-div" );
+    rkWebUtil.elemaker( "p", this.maindiv, { "text": "text so selenium displays the main div" } )
     if ( this.statusdiv == null ) {
         window.alert( "Couldn't find status div!  This should never happen." );
         return;
