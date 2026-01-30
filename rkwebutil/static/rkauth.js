@@ -196,6 +196,12 @@ rkAuth.prototype.getAESKey = async function( password, salt, iv )
                                                   { "name": "AES-GCM", length: 256 },
                                                   false, // exportable?
                                                   [ "encrypt", "decrypt" ] );
+    // ****
+    // **** Need exportable to be true on aeskey for this log to work
+    // const exportkey = await crypto.subtle.exportKey( "raw", aeskey );
+    // const dumpkey = new Uint8Array( exportkey );
+    // console.log( "aeskey = " + dumpkey.toHex() )
+    // ****
     return aeskey;
 }
 

@@ -34,6 +34,7 @@ def main():
 
     initialkey = PBKDF2( args.password.encode('utf-8'), salt, 32, count=100000, hmac_hash_module=SHA256 )
     aeskey = AES.new( initialkey, AES.MODE_GCM, iv )
+    # Print aeskey._key (byte array, so hex it or something) to see the raw key export
     encprivkey, tag = aeskey.encrypt_and_digest( privkey.encode('utf-8') )
     encprivkey = encprivkey + tag
     encprivkey = base64.b64encode( encprivkey ).decode( 'utf-8' )
