@@ -272,6 +272,8 @@ class rkAuthClient:
                     raise RuntimeError( f"Got response {res.status_code}: {res.text}" )
                 return res
             except Exception as ex:
+                if 'res' not in locals():
+                    raise RuntimeError( f"Error trying to send the query: {ex}" )
                 if res.status_code in ( 409, 422 ):
                     # This is what the server should return to indicate an actual error in the
                     #   query.  In that case, we don't want to retry.  TODO: are there
