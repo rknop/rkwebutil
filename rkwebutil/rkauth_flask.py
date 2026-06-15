@@ -345,7 +345,7 @@ def getchallenge():
 
     Response
     --------
-      200 application/json or 500 text/plain
+      200 application/json or 422 text/plain
 
           { 'username': str  # user's username
             'privkey': str   # user's private key encrypted with user's password
@@ -354,7 +354,7 @@ def getchallenge():
             'challenge': str # a uuid encrypted with the user's public key
           }
 
-          In the envet of an error, returns an HTTP 500 with an utf8
+          In the envet of an error, returns an HTTP 422 with an utf8
           text error message.  Some specific errors returned:
              "No such user {username}"                            # if the user is not found int he database
              "User {username} does not have a password set yet"   # If the pubkey is null
@@ -363,18 +363,18 @@ def getchallenge():
     try:
         flask.session['authenticated'] = False
         if not flask.request.is_json:
-            return "Error, /auth/getchallenge was expecting application/json", 500
+            return "Error, /auth/getchallenge was expecting application/json", 422
         data = flask.request.json
 
         if 'username' not in data:
-            return "Error, no username sent to server", 500
+            return "Error, no username sent to server", 422
         if not _validate_username( data['username'] ):
-            return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
+            return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 422
         user = get_user_by_username( data['username'] )
         if user is None:
-            return f"No such user {data['username']}", 500
+            return f"No such user {data['username']}", 422
         if user.pubkey is None:
-            return f"User {data['username']} does not have a password set yet", 500
+            return f"User {data['username']} does not have a password set yet", 422
 
         tmpuuid = str( uuid.uuid4() )
         pubkey = Crypto.PublicKey.RSA.importKey( user.pubkey )
@@ -396,7 +396,7 @@ def getchallenge():
         return retdata
     except Exception as e:
         flask.current_app.logger.exception( "Exception in getchallenge" )
-        return f"Exception in getchallenge: {str(e)}", 500
+        return f"Exception in getchallenge: {str(e)}", 422
 
 
 @bp.route( '/respondchallenge', methods=['POST'] )
@@ -413,7 +413,7 @@ def respondchallenge():
 
     Response
     --------
-      200 application/json or 500 text/plain
+      200 application/json or 422 text/plain
          { 'status': 'ok',
            'message': 'User {username} logged in.',
            'useruuid': str,           # The users database uuid primary key
@@ -428,22 +428,22 @@ def respondchallenge():
            'message': 'Authentication failure.'
          }
 
-         Other errors return a HTTP 500 with a text/plain error message
+         Other errors return a HTTP 422 with a text/plain error message
 
     """
     try:
         if not flask.request.is_json:
-            return "auth/respondchallenge was expecting application/json", 500
+            return "auth/respondchallenge was expecting application/json", 422
         if ( ( 'username' not in flask.request.json ) or
              ( 'response' not in flask.request.json ) ):
             return ( "Login error: username or challenge response missing "
-                     "(you probably can't fix this, contact code maintainer)" ), 500
+                     "(you probably can't fix this, contact code maintainer)" ), 422
         if not _validate_username( flask.request.json['username'] ):
-            return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
+            return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 422
         if flask.request.json['username'] != flask.session['username']:
             return  ( f"Username {flask.request.json['username']} "
                       f"didn't match session username {flask.session['username']}; "
-                      f"try logging out and logging back in." ), 500
+                      f"try logging out and logging back in." ), 422
         if flask.session["authuuid"] != flask.request.json['response']:
             return { 'error': 'Authentication failure.' }
         flask.session['authenticated'] = True
@@ -458,7 +458,7 @@ def respondchallenge():
     except Exception as e:
         sys.stderr.write( f'{traceback.format_exc()}\n' )
         # return flask.jsonify( { 'error': f'Exception in RespondAuthChallenge: {str(e)}' } )
-        return f"Exception in respondchallenge: {str(e)}", 500
+        return f"Exception in respondchallenge: {str(e)}", 422
 
 
 @bp.route( '/getpasswordresetlink', methods=['POST'] )
@@ -477,31 +477,31 @@ def getpasswordresetlink():
 
     Response
     --------
-    200 application/json or 500 text/plain
+    200 application/json or 422 text/plain
 
       If successful, returns { 'status': 'Password reset link(s) sent for {usernames}' }
 
-      If failed, returns a 500 with a text error message.
+      If failed, returns a 422 with a text error message.
 
     """
     try:
         if not flask.request.is_json:
-            return "/auth/getpasswordresetlink was expecting application/json", 500
+            return "/auth/getpasswordresetlink was expecting application/json", 422
 
         if 'username' in flask.request.json and flask.request.json['username']:
             username = flask.request.json['username']
             if not _validate_username( username ):
-                return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 500
+                return "Invalid username; username may only include A-Z, a-z, 0-9, @, ., _, and -.", 422
             them = get_user_by_username( username )
             if them is None:
-                return f"No such user {username}", 500
+                return f"No such user {username}", 422
         elif 'email' in flask.request.json and flask.request.json['email']:
             email = flask.request.json['email']
             them = get_users_by_email( email )
             if them is None:
-                return "requested email not known", 500
+                return "requested email not known", 422
         else:
-            return "Must include either 'username' or 'email' in POST data", 500
+            return "Must include either 'username' or 'email' in POST data", 422
 
         if not isinstance( them, list ):
             them = [ them ]
@@ -563,7 +563,7 @@ def getpasswordresetlink():
         return { 'status': f'Password reset link(s) sent for {sentto}.' }
     except Exception as e:
         flask.current_app.logger.exception( "Exception in getpasswordresetlink" )
-        return f"Exception in getpasswordresetlink: {str(e)}", 500
+        return f"Exception in getpasswordresetlink: {str(e)}", 422
 
 
 @bp.route( '/resetpassword', methods=['GET'] )
@@ -623,7 +623,7 @@ def resetpassword():
         return flask.make_response( response )
     except Exception as e:
         sys.stderr.write( f'{traceback.format_exc()}\n' )
-        return f"Exception in resetpassword: {str(e)}", 500
+        return f"Exception in resetpassword: {str(e)}", 422
 
 
 @bp.route( '/changepassword', methods=['POST'] )
@@ -655,21 +655,21 @@ def changepassword():
 
     Response
     ---------
-      200 application/json or 500 text/plain
+      200 application/json or 422 text/plain
         If successful, returns { "status": "Password change" }
-        If failed, returns an HTTP 500 with a text error message
+        If failed, returns an HTTP 422 with a text error message
 
     """
     try:
         if not flask.request.is_json:
-            return "Error, /auth/changepassword was expecting application/json", 500
+            return "Error, /auth/changepassword was expecting application/json", 422
         for key in [ "passwordlinkid", "publickey", "privatekey", "salt", "iv" ]:
             if key not in flask.request.json:
-                return f"Error, call to changepassword without {key}", 500
+                return f"Error, call to changepassword without {key}", 422
 
         pwlink = get_password_link( flask.request.json['passwordlinkid'] )
         if pwlink is None:
-            return "Invalid password link {flask.request.json['passwordlinkid']}", 500
+            return "Invalid password link {flask.request.json['passwordlinkid']}", 422
 
         with _con_and_cursor() as con_and_cursor:
             con, cursor = con_and_cursor
@@ -677,7 +677,7 @@ def changepassword():
                             {'uuid': pwlink['userid']} )
             rows = cursor.fetchall()
             if len(rows) == 0:
-                return f"Unknown user id {pwlink['userid']}; this shouldn't happen", 500
+                return f"Unknown user id {pwlink['userid']}; this shouldn't happen", 422
             user = rows[0]
 
             cursor.execute( f"UPDATE {RKAuthConfig.authuser_table} SET pubkey=%(pubkey)s,privkey=%(privkey)s "
@@ -695,7 +695,7 @@ def changepassword():
             return { "status": "Password changed" }
     except Exception as e:
         flask.current_app.logger.exception( "Exception in changepassword" )
-        return f"Exception in changepassword: {str(e)}", 500
+        return f"Exception in changepassword: {str(e)}", 422
 
 
 @bp.route( '/isauth', methods=['POST'] )
