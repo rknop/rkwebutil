@@ -40,6 +40,7 @@ RUN source /venv/bin/activate \
     && pip --no-cache install \
        flask \
        flask-session \
+       numpy \
        psycopg \
        setuptools \
        setuptools-scm

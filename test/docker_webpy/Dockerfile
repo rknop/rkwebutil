@@ -38,6 +38,7 @@ RUN python3 -mvenv /venv
 
 RUN source /venv/bin/activate \
     && pip --no-cache install \
+       numpy \
        psycopg \
        setuptools \
        setuptools-scm \

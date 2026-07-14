@@ -45,6 +45,7 @@ RUN source /venv/bin/activate && \
        apscheduler \
        flask \
        flask-session \
+       numpy \
        psycopg \
        gunicorn \
        setuptools \

@@ -2,6 +2,8 @@ import flask
 import flask_session
 import logging
 
+import numpy
+
 from rkwebutil import rkauth_flask
 
 
@@ -67,5 +69,35 @@ def create_app():
         else:
             return f"Only 42 accepted, {fortytwo} is too low.", 422
 
+
+    @app.route('/gimmeimage', methods=['GET', 'POST'] )
+    def gimmeimage():
+        # Return a float32 packed 1024x2048 image with a guassian in the lower left
+        #   and a dimmer gaussian in the upper right
+        w = 1024
+        h = 2048
+
+        img = numpy.zeros( ( h, w ), dtype='<f4' )
+        idx = numpy.indices( (h, w) )
+        y = idx[0]
+        x = idx[1]
+
+        r = numpy.sqrt( (x - w/4)**2 + (y - h/4)**2 )
+        img += 2000 * numpy.exp( -r**2 / (2. * 50.**2) )
+
+        r = numpy.sqrt( (x - 3*w/4)**2 + (y - 3*h/4)**2 )
+        img += 1000 * numpy.exp( -r**2 / (2. * 25.**2) )
+
+        barf = bytearray( 4*h*w + 4 )
+        barf[0] = h % 256
+        barf[1] = h // 256
+        barf[2] = w % 256
+        barf[3] = w // 256
+        barf[4:] = img.data
+
+        return flask.Response( bytes(barf), content_type="application/octet-stream" )
+
+
+    # ======================================================================
 
     return app
