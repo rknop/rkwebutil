@@ -1,7 +1,7 @@
 /**
  * This file is part of rkwebutil
  *
- * rkwebutil is Copyright 2023-2024 by Robert Knop
+ * rkwebutil is Copyright 2023-2026 by Robert Knop
  *
  * rkwebutil is free software under the BSD 3-clause license (see LICENSE)
  */
@@ -973,6 +973,40 @@ rkWebUtil.Connector = class
             return;
         }
         handler( statedata );
+        if ( finalcall != null ) finalcall();
+    }
+
+    sendHttpRequestGetRaw( appcommand, data, handler, errorhandler, finalcall=null )
+    {
+        let self = this;
+        let req = new XMLHttpRequest();
+        if ( ( this.app.substring( this.app.length -1 ) == '/' ) && ( appcommand.substring( 0 , 1 ) == '/' ) )
+            appcommand = appcommand.substring( 1 )
+        req.open( "POST", this.app + appcommand );
+        req.onreadystatechange = function() { self.catchHttpResponseRaw( req, handler, errorhandler=errorhandler,
+                                                                         finalcall=finalcall ) };
+        req.setRequestHeader( "Content-Type", "application/json" );
+        req.responseType = 'arraybuffer';
+        req.send( JSON.stringify( data ) );
+    }
+
+    catchHttpResponseRaw( request, handler, errorhandler=null, finalcall=null )
+    {
+        // If in progress, just continue
+        if ( request.readyState != 4 ) return;
+
+        if ( request.status != 200 ) {
+            let errmsg = "Request came back with status " + request.status.toString() + ": " + request.responseText;
+            if ( errorhandler != null ) {
+                errorhandler( { "error":  errmsg } );
+            }
+            else {
+                window.alert( errmsg );
+            }
+            if ( finalcall != null ) finalcall();
+        }
+
+        handler( request.response );
         if ( finalcall != null ) finalcall();
     }
 }

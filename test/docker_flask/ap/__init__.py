@@ -98,6 +98,10 @@ def create_app():
         return flask.Response( bytes(barf), content_type="application/octet-stream" )
 
 
+    @app.route('/showimage', methods=['GET', 'POST'])
+    def showimage():
+        return flask.render_template( 'showimage.html' )
+
     # ======================================================================
 
     return app

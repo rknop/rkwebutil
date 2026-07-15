@@ -1,7 +1,9 @@
-import { rkwebUtil } from "./rkwebutil.js"
+import { rkWebUtil } from "./rkwebutil.js"
 
 class ImView {
-    // data is stored in column-major format, like a FITS image.
+    // data is stored in column-major format, like a FITS image.  It must be
+    //   a DataView with little-endian float32 data.
+    //   (Why little-endian?  Because that's native where I usually work.)
     // The assumption is that pixel (0,0) is the lower-left,
     //    which is backwards from html display
 
@@ -20,31 +22,38 @@ class ImView {
                         "scale": null,
                         "parent": null,
                         "min": null,
-                        "max" null,
-
+                        "max": null
                       };
         Object.assign( this.params, inparams )
-
-        if ( ( this.params.data == null ) || ( this.params.width == null ) || ( this.params.height == null ) ) {
+        for ( let field of [ 'data', 'width', 'height', 'dispwidth', 'dispheight',
+                             'x0', 'y0', 'scale', 'parent', 'min', 'max' ] ) {
+            this[field] = this.params[field]
+        }
+        
+        if ( ( this.data == null ) || ( this.width == null ) || ( this.height == null ) ) {
             window.alert( "ImView: must have non-null data, width, and height." )
             return;
         }
-        if ( ! ( this.params.data instanceof Float32Array ) ) {
-            window.alert( "ImView: data must be a Float32Array" );
+
+        this.ndata = this.width * this.height;
+
+        if ( ! ( this.data instanceof DataView ) ) {
+            window.alert( "ImView: data must be a DataView" );
             return;
         }
-        if ( this.params.data.length != ( this.params.width * this.params.height ) ) {
-            window.alert( "Imview: data array length " + this.params.data.length.toString() +
-                          "doesn't match width × height " + this.params.width.toString() +
-                          " × " + this.params.height.toString() );
+        if ( this.data.byteLength != ( this.ndata * 4 ) ) {
+            window.alert( "Imview: data array length " + this.data.byteLength.toString() +
+                          "doesn't match width × height × 4 " + this.width.toString() +
+                          " × " + this.height.toString() + " × 4" );
             return;
         }
 
         let tot = 0.;
         let tot2 = 0.;
         let n = 0;
-        for ( let val of this.data.values() ) {
-            if ( ! isNan(val) ) {
+        for ( let i = 0 ; i < this.ndata ; ++i ) {
+            let val = this.data.getFloat32( 4*i, true )
+            if ( ! isNaN(val) ) {
                 tot += val;
                 tot2 += val * val;
                 n += 1;
@@ -56,23 +65,23 @@ class ImView {
         }
         else {
             this.mean = tot / n;
-            this.sdev = Math.sqrt( ( tot2 * tot2 / n ) - ( this.mean * this.mean ) );
+            this.sdev = Math.sqrt( ( tot2 / n ) - ( this.mean * this.mean ) );
         }
 
-        this.init_min = this.params.min;
-        this.init_max = this.params.max;
+        this.init_min = this.min;
+        this.init_max = this.max;
         if ( this.init_min == null ) {
             this.init_min = this.mean - 5. * this.sdev;
         }
         if ( this.init_max == null ) {
             this.init_max = this.mean + 5. * this.sdev;
         }
-        this.params.min = this.init_min;
-        this.params.max = this.init_max;
+        this.min = this.init_min;
+        this.max = this.init_max;
         
-        this.init_scale = this.params.scale;
-        this.init_x0 = this.params.x0;
-        this.init_y0 = this.params.y0;
+        this.init_scale = this.scale;
+        this.init_x0 = this.x0;
+        this.init_y0 = this.y0;
         if ( this.init_scale == null ) {
             if ( ( this.dispheight / this.height ) < ( this.dispwidth / this.width ) ) {
                 this.init_scale = this.dispheight / this.height;
@@ -81,83 +90,88 @@ class ImView {
                 this.init_scale = this.dispwidth / this.width;
             }
         }
+        this.scale = this.init_scale;
         if ( this.init_x0 == null ) {
-            this.init_x0 = ( this.params.width / 2. ) - ( this.params.dispwidth / 2. / this.params.scale );
+            this.init_x0 = ( this.width / 2. ) - ( this.dispwidth / 2. / this.scale );
         }
+        this.x0 = this.init_x0;
         if ( this.init_y0 == null ) {
-            this.init_y0 = ( this.params.height / 2. ) - ( this.params.dispheight / 2. / this.params.scale );
+            this.init_y0 = ( this.height / 2. ) - ( this.dispheight / 2. / this.scale );
         }
-        this.params.scale = this.init_scale;
-        this.params.x0 = this.init_x0;
-        this.params.y0 = this.init_y0;
+        this.y0 = this.init_y0;
 
-        this.div = rkWebUtil.elemaker( "div", this.params.parent, { "classes": [ 'imview_topdiv' ] } );
-        this.canvas = rkWebUtil.elemaker( "canvas", this.div, { "attributes": { "width": this.params.dispwidth,
-                                                                                "height": this.params.dispheight } } );
+        this.div = rkWebUtil.elemaker( "div", this.parent, { "classes": [ 'imview_topdiv' ] } );
+        this.canvas = rkWebUtil.elemaker( "canvas", this.div, { "attributes": { "width": this.dispwidth,
+                                                                                "height": this.dispheight } } );
         this.ctx = this.canvas.getContext( "2d" );
-        this.imagedata = ctx.createImageData( this.params.dispwidth, this.params.dispheight );
 
         this.render_image();
     }
 
 
     change_stretch( min, max ) {
-        this.params.min = min;
-        this.params.max = max;
+        this.min = min;
+        this.max = max;
         this.render_image();
     }
 
 
     reset_stretch() {
-        this.params.min = this.init_min;
-        this.params.max = this.init_max;
+        this.min = this.init_min;
+        this.max = this.init_max;
         this.render_image();
     }
     
 
     reset_zoom() {
-        this.params.scale = this.init_scale;
-        this.params.x0 = this.init_x0;
-        this.params.y0 = this.init_y0;
+        this.scale = this.init_scale;
+        this.x0 = this.init_x0;
+        this.y0 = this.init_y0;
         this.render_image();
     }
     
     
     render_image() {
         // Don't (yet?) support backwards color mapping
-        if ( this.params.max < this.params.min ) {
-            let tmp = this.params.min;
-            this.params.min = this.params.max;
-            this.params.max = tmp;
+        if ( this.max < this.min ) {
+            let tmp = this.min;
+            this.min = this.max;
+            this.max = tmp;
         }
 
+        let imagedata = this.ctx.createImageData( this.dispwidth, this.dispheight );
+
         // Does javascript have vectorized stuff to make this faster?
-        for( let dispy = 0 ; dispy < this.params.dispheight ; ++dispy ) {
-            let off = dispy * this.params.dispwidth * 4;
-            let imgy = Math.round( ( this.params.dispheight - dispy ) / this.params.scale + this.params.y0 );
-            let offedge == ( imgy < 0 ) || ( imgy >= this.params.height );
+        for( let dispy = 0 ; dispy < this.dispheight ; ++dispy ) {
+            let off = dispy * this.dispwidth * 4;
+            let imgy = Math.round( ( this.dispheight - dispy ) / this.scale + this.y0 );
+            let yoffedge = ( imgy < 0 ) || ( imgy >= this.height );
             let lastimgx = -1e32;
             let bval = 0;
-            for ( let dispx = 0 ; dispx < this.params.dispwidth ; ++dispx ) {
+            for ( let dispx = 0 ; dispx < this.dispwidth ; ++dispx ) {
+                let imgx = 0;
+                let offedge = yoffedge;
                 if ( ! offedge ) {
-                    let imgx = Math.round( dispx / this.params.scale + this.params.x0 );
-                    offedge = ( imgx < 0 ) || ( imgx >= this.params.width );
+                    imgx = Math.round( dispx / this.scale + this.x0 );
+                    offedge = ( imgx < 0 ) || ( imgx >= this.width );
                 }
                 if ( offedge ) {
                     bval = 255;
                 }
                 else {
                     if ( imgx != lastimgx ) {
-                        val = this.params.data.at( imgy * this.params.width + imgx );
+                        // Man I hope function calling overhead doesn't kill us here.
+                        // With any luck, DataView.getFloat32 is implemented as an inline thing
+                        let val = this.data.getFloat32( 4 * ( imgy * this.width + imgx ), true );
                         bval = 0;
-                        if ( val > this.params.min ) {
-                            if ( val >= this.params.max ) {
+                        if ( val > this.min ) {
+                            if ( val >= this.max ) {
                                 bval = 255;
                             } else {
-                                bval = ( val - this.params.min ) * 255 / ( this.params.max - this.params.min );
+                                bval = ( val - this.min ) * 255 / ( this.max - this.min );
                             }
                         }
-                        if isNan(bval) {
+                        if ( isNaN(bval) ) {
                             bval = 0;
                         } else {
                             // I feel very queasy about javascript not having an expicit uint8 type
@@ -167,14 +181,20 @@ class ImView {
                         }
                     }
                 }
-                this.imagedata.data[ off ] = bval;
-                this.imagedata.data[ off + 1 ] = bval;
-                this.imagedata.data[ off + 2 ] = bval;
-                this.imagedata.data[ off + 3 ] = 255;
+                imagedata.data[ off ] = bval;
+                imagedata.data[ off + 1 ] = bval;
+                imagedata.data[ off + 2 ] = bval;
+                imagedata.data[ off + 3 ] = 255;
                 lastimgx = imgx;
                 off += 4;
             }
         }
+
+        this.ctx.putImageData( imagedata, 0, 0 );
     }
 
 }
+
+// **********************************************************************
+
+export { ImView }

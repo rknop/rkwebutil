@@ -35,21 +35,40 @@ FROM base AS build
 RUN DEBIAN_FRONTEND="noninteractive" TZ="US/Pacific" \
     apt-get update \
     && DEBIAN_FRONTEND="noninteractive" TZ="US/Pacific" \
-    apt-get -y install -y python3-pip python3-venv git libpq-dev
+    apt-get -y install -y python3-pip python3-venv git libpq-dev \
+       python3-setuptools python3-setuptools-scm
 
 RUN mkdir /venv
 RUN python3 -mvenv /venv
 
+# Trying to get all the dependencies here
+#   so that the pip install . step below
+#   doesn't always redownload every time
+#   we rebuild the dockerfile after
+#   a trivial edit.
+# This also meant putting setuptools and setuptools-scm
+#   in the apt-get above.  (For reasons I don't
+#   understand, pip installing setuptools made the
+#   "pip install ." later choke, claiming that
+#   setuptools was a package and not a module.
+#   Sigh.  The pytproject.toml tries to do
+#   everything for you, but lives in a world
+#   that assumes we have good net connection at
+#   all times.
+
 RUN source /venv/bin/activate && \
     pip --no-cache install \
        apscheduler \
+       "dateutils>=0.6.12,<0.7.0" \
        flask \
        flask-session \
        numpy \
        psycopg \
+       "pycryptodome>=3.20,<4.0" \
+       "pytz>=2022.7.1" \
+       "pyyaml>6.0.2,<7.0.0" \
        gunicorn \
-       setuptools \
-       setuptools-scm
+       "requests>=2.28,<3.0"
 
 RUN mkdir -p /usr/src/rkwebutil
 WORKDIR /usr/src/rkwebutil

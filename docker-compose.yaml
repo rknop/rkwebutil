@@ -49,8 +49,12 @@ services:
 
   flask:
     depends_on:
-      createdb:
-        condition: service_completed_successfully
+      # Commenting out; need to make it so that
+      #   createdb won't be rerun if it's already been
+      #   run so we can docker compose down and up just
+      #    flask
+      # createdb:
+      #   condition: service_completed_successfully
       mailhog:
         condition: service_started
     healthcheck:
@@ -130,12 +134,16 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      createdb:
+        condition: service_started
       flask:
         condition: service_healthy
-      webpy:
-        condition: service_healthy
-      apache:
-        condition: service_healthy
+      # TEMPORARY COMMENTED OUT
+      # While I work in a place with a terrible net connection
+      # webpy:
+      #   condition: service_healthy
+      # apache:
+      #   condition: service_healthy
     image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251209}
     build:
       context: test/docker_test
