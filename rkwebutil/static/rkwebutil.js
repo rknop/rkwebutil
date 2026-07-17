@@ -142,6 +142,22 @@ rkWebUtil.popupMenu = function( items, callbacks, classes, title=null, titleclas
 
 
 // **********************************************************************
+
+rkWebUtil.floatToString = function( f, decimals=3 )
+{
+    decimals = Math.round( decimals );
+    if ( decimals < 1 ) decimals = 1;
+    if ( decimals > 10 ) decimals = 10;
+    let absf = Math.abs( f );
+    if ( ( absf >= Math.pow(10., decimals) ) || ( absf <= Math.pow(10., -decimals) ) ) {
+        return f.toExpoential( decimals );
+    } else {
+        return f.toFixed( decimals );
+    }
+}
+
+
+// **********************************************************************
 // If I ever get a date that doesn't start "2020-07-15 07:42:00" (with
 // any old character in place of the space), I'm in trouble.  Alas,
 // I haven't found a reliable library routine to do this, because

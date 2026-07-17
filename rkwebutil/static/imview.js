@@ -12,6 +12,8 @@ class ImView {
     // scale is in display pixels per data pixel
 
     constructor( inparams={} ) {
+        var self = this;
+
         this.params = { "data": null,
                         "width": null,
                         "height": null,
@@ -29,7 +31,7 @@ class ImView {
                              'x0', 'y0', 'scale', 'parent', 'min', 'max' ] ) {
             this[field] = this.params[field]
         }
-        
+
         if ( ( this.data == null ) || ( this.width == null ) || ( this.height == null ) ) {
             window.alert( "ImView: must have non-null data, width, and height." )
             return;
@@ -78,7 +80,7 @@ class ImView {
         }
         this.min = this.init_min;
         this.max = this.init_max;
-        
+
         this.init_scale = this.scale;
         this.init_x0 = this.x0;
         this.init_y0 = this.y0;
@@ -101,9 +103,32 @@ class ImView {
         this.y0 = this.init_y0;
 
         this.div = rkWebUtil.elemaker( "div", this.parent, { "classes": [ 'imview_topdiv' ] } );
-        this.canvas = rkWebUtil.elemaker( "canvas", this.div, { "attributes": { "width": this.dispwidth,
-                                                                                "height": this.dispheight } } );
+        this.infodiv = rkWebUtil.elemaker( "div", this.parent, { "classes": [ 'hbox' ] } );
+        rkWebUtil.elemaker( "span", this.infodiv, { "text": "x:", "classes": [ 'bold' ] } );
+        this.xwidget = rkWebUtil.elemaker( "span", this.infodiv, { "classes": [ 'insetborder' ],
+                                                                   "attributes": { 'width': '10ex' } } );
+        rkWebUtil.elemaker( "span", this.infodiv, { "text": "  y:", "classes'": [ 'bold' ] } );
+        this.ywidget = rkWebUtil.elemaker( "span", this.infodiv, { "classes": [ 'insetborder' ],
+                                                                   "attributes": { 'width': '10ex' } } );
+        rkWebUtil.elemaker( "span", this.infodiv, { "text": "  value:", "classes": [ 'bold' ] } );
+        this.valwidget = rkWebUtil.elemaker( "span", this.infodiv, { "classes": [ 'insetborder' ],
+                                                                     "attributes": { 'width': '12ex' } } );
+
+        this.cavasdiv = rkWebUtil.elemaker( "div", this.div, { "classes": [ 'canvasdiv' ] } );
+        this.canvas = rkWebUtil.elemaker( "canvas", this.canvasdiv, { "attributes": { "width": this.dispwidth,
+                                                                                      "height": this.dispheight } } );
         this.ctx = this.canvas.getContext( "2d" );
+
+        this.buttondiv = rkWebUtil.elemaker( "div", this.div, { "classes": [ 'hbox' ] } );
+        rkWebUtil.elemaker( "span", this.buttondiv, { "text": "min:", "classes": [ 'bold' ] } );
+        this.minwidget = rkWebUtil.elemaker( "input", this.buttondiv,
+                                             { "text": rkWebUtil.floatToString( this.min ),
+                                               "classes": [ 'outsetborder' ] } );
+        rkWebUtil.elemaker( "span", this.buttondiv, { "text": "max:", "classes": [ 'bold' ] } );
+        this.maxwidget = rkWebUtil.elemaker( "input", this.buttondiv,
+                                             { "text": rkWebUtil.floatToString( this.max ),
+                                               "classes": [ 'outsetborder' ] } );
+        rkWebUtil.button( this.buttondiv, "Redraw", function() { self.render_image() } );
 
         this.render_image();
     }
@@ -121,7 +146,7 @@ class ImView {
         this.max = this.init_max;
         this.render_image();
     }
-    
+
 
     reset_zoom() {
         this.scale = this.init_scale;
@@ -129,8 +154,8 @@ class ImView {
         this.y0 = this.init_y0;
         this.render_image();
     }
-    
-    
+
+
     render_image() {
         // Don't (yet?) support backwards color mapping
         if ( this.max < this.min ) {

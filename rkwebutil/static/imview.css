@@ -1,0 +1,73 @@
+:root {
+    --link-color: #000066;
+    --link-decoration: underline;
+    --main-color: black;
+    --background-color: white;
+    --half-faded-color: #888888;
+    --some-faded-color: #666666;
+    --lots-faded-color: #cccccc;
+    --most-faded-color: #eeeeee;
+    --highlight-color: #993333;
+    --full-color-border: black;
+    --mid-color-border: #999999;
+    --mostlyfull-color-border: #666666;
+    --embiggen-background: #bbbbbb;
+    --tooltip-background: #ffff66;
+    --tooltip-border: #0000ff;
+    --tooltip-color: black;
+    --good-color: #006000;
+    --bad-color: #c00000;
+    --warning-color: #c06040;
+    --held-color: #c00000;
+    --ready-color: #aa00aa;
+    --claimed-color: #aa5500;
+    --running-color: #0000c0;
+    --done-color: #006000;
+}
+
+body { color: var(--main-color);
+       background: var(--background-color);
+     }
+
+.right { text-align: right }
+.center { text-align: center }
+.vcenter { vertical-align: middle }
+.italic { font-style: italic }
+.bold { font-weight: bold }
+.monospace { font-family: monospace }
+
+.insetborder { border-style: inset;
+               border-color: var(--mostlyfull-color-border);
+.insetborder { border-style: outset;
+               border-color: var(--mostlyfull-color-border);
+             }
+
+
+div.hbox { display: flex;
+           flex-direction: row;
+           min-width: 0;
+           min-height: 0; }
+
+div.vbox { display: flex;
+           flex-direction: column;
+           min-width: 0;
+           min-height: 0; }
+
+div.imview_topdiv { position: relative;
+                    display: flex;
+                    flex-direction: column;
+                    flex-grow: 0;
+                    flex-shrink: 0;
+                    min-width: 0;
+                    min-height: 0;
+                    padding: 1ex;
+                    border: 2px solid var(--full-color-border);
+                  }
+
+div.canvasdiv { margin-left: auto;
+                margin-right: auto;
+                padding: 1ex;
+                border: 2px solid var(--full-color-border);
+              }
+
+                

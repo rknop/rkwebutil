@@ -1,6 +1,6 @@
 # This dockerfile must be run from the top of the rkwebutil checkout
 
-FROM debian:bookworm AS base
+FROM debian:trixie-20260713 AS base
 LABEL maintainer="Rob Knop <rknop@pobox.com>"
 
 SHELL ["/bin/bash", "-c"]
@@ -95,7 +95,7 @@ COPY test/docker_flask/server.py /flask
 COPY test/docker_flask/ap /flask/ap
 RUN ln -s /flask/ap/static /flask/static
 RUN ln -s /flask/ap/templates /flask/templates
-RUN cp -p /venv/lib/python3.11/site-packages/rkwebutil/static/* /flask/static/
+RUN cp -p /venv/lib/python3.13/site-packages/rkwebutil/static/* /flask/static/
 WORKDIR /flask
 
 ENTRYPOINT [ "gunicorn", "--certfile", "/usr/src/cert.pem", "--keyfile", "/usr/src/key.pem", \

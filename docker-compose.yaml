@@ -52,7 +52,11 @@ services:
       # Commenting out; need to make it so that
       #   createdb won't be rerun if it's already been
       #   run so we can docker compose down and up just
-      #    flask
+      #   flask.  For actual testing, we can rely on the
+      #   createdb prereq in shell and runtests, so
+      #   we might not even need this here, though
+      #   it would be nice so soomebody could just
+      #   bring up flask if they wanted to.
       # createdb:
       #   condition: service_completed_successfully
       mailhog:
@@ -138,12 +142,10 @@ services:
         condition: service_started
       flask:
         condition: service_healthy
-      # TEMPORARY COMMENTED OUT
-      # While I work in a place with a terrible net connection
-      # webpy:
-      #   condition: service_healthy
-      # apache:
-      #   condition: service_healthy
+      webpy:
+        condition: service_healthy
+      apache:
+        condition: service_healthy
     image: ${DOCKER_ARCHIVE:-ghcr.io/rknop}/rkwebutil_test:${DOCKER_VERSION:-test20251209}
     build:
       context: test/docker_test
@@ -158,6 +160,8 @@ services:
   runtests:
     depends_on:
       postgres:
+        condition: service_started
+      createdb:
         condition: service_started
       flask:
         condition: service_healthy

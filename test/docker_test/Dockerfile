@@ -1,4 +1,4 @@
-FROM debian:bookworm AS base
+FROM debian:trixie-20260713 AS base
 LABEL maintainer="Rob Knop <raknop@pobox.com>"
 
 SHELL ["/bin/bash", "-c"]

@@ -1,6 +1,6 @@
 # This dockerfile must be run from the parent directory of the Dockerfile's directory
 
-FROM debian:bookworm AS base
+FROM debian:trixie-20260713 AS base
 LABEL maintainer="Rob Knop <rknop@pobox.com>"
 
 SHELL [ "/bin/bash", "-c" ]
@@ -76,7 +76,7 @@ RUN chmod -R a+rwx /var/log/apache2
 RUN chmod -R a+rwx /var/run/apache2
 
 COPY test/docker_webpy/ap.css test/docker_webpy/ap.js test/docker_webpy/ap.py test/docker_webpy/ap_start.js /var/www/html/
-RUN cp -p /venv/lib/python3.11/site-packages/rkwebutil/static/* /var/www/html/
+RUN cp -p /venv/lib/python3.13/site-packages/rkwebutil/static/* /var/www/html/
 
 RUN apachectl start
 
