@@ -1,29 +1,27 @@
+/* You probably don't want to include this whole CSS file, but select from it.
+
+   At the top, the colors must be defined in :root, as the things below use it.
+   Just make sure you have them defined in your root.
+
+   The "standard stuff" section is stuff that I tend to define in other CSS
+   files.  If you've defined those classes already, and they do the same
+   thing (or close enough), then you don't need them here.
+
+   The "imview custom" stuff is the stuff you almost certainly will need to copy
+   into your CSS.
+
+   Or just use this whole file and hope for the best.
+*/
+
 :root {
-    --link-color: #000066;
-    --link-decoration: underline;
     --main-color: black;
     --background-color: white;
-    --half-faded-color: #888888;
-    --some-faded-color: #666666;
-    --lots-faded-color: #cccccc;
-    --most-faded-color: #eeeeee;
-    --highlight-color: #993333;
     --full-color-border: black;
-    --mid-color-border: #999999;
     --mostlyfull-color-border: #666666;
-    --embiggen-background: #bbbbbb;
-    --tooltip-background: #ffff66;
-    --tooltip-border: #0000ff;
-    --tooltip-color: black;
-    --good-color: #006000;
-    --bad-color: #c00000;
-    --warning-color: #c06040;
-    --held-color: #c00000;
-    --ready-color: #aa00aa;
-    --claimed-color: #aa5500;
-    --running-color: #0000c0;
-    --done-color: #006000;
 }
+
+/**********************************************************************/
+/* Standard Stuff */
 
 body { color: var(--main-color);
        background: var(--background-color);
@@ -36,38 +34,53 @@ body { color: var(--main-color);
 .bold { font-weight: bold }
 .monospace { font-family: monospace }
 
+.marginleftex { margin-left: 1ex }
+
 .insetborder { border-style: inset;
                border-color: var(--mostlyfull-color-border);
+             }
 .insetborder { border-style: outset;
                border-color: var(--mostlyfull-color-border);
              }
 
-
 div.hbox { display: flex;
            flex-direction: row;
            min-width: 0;
-           min-height: 0; }
+           min-height: 0;
+         }
+
+.justifyleft { justify-content: flex-start }
+.justifycenter { justify-content: center }
 
 div.vbox { display: flex;
            flex-direction: column;
            min-width: 0;
-           min-height: 0; }
+           min-height: 0;
+         }
 
-div.imview_topdiv { position: relative;
-                    display: flex;
+
+/**********************************************************************/
+/* imview custom stuff */
+
+div.imview_topdiv { display: flex;
                     flex-direction: column;
+                    justify-content: flex-start;
                     flex-grow: 0;
-                    flex-shrink: 0;
+                    flex-shrink: 1;
                     min-width: 0;
                     min-height: 0;
                     padding: 1ex;
-                    border: 2px solid var(--full-color-border);
+                    border: 1px solid var(--full-color-border);
                   }
 
-div.canvasdiv { margin-left: auto;
-                margin-right: auto;
-                padding: 1ex;
-                border: 2px solid var(--full-color-border);
-              }
+div.imview_canvasdiv { flex-grow: 0;
+                       flex-shrink: 1;
+                       padding: 1ex;
+                       border: 2px solid var(--full-color-border);
+                     }
 
-                
+div.imview_canvaswrapper { position: relative; margin: 0; padding: 0; border: 0 }
+canvas.imview_canvas { position: absolute; left: 0; top: 0; margin: 0; padding: 0; border: 0; z-index: 1;
+                       image-rendering: pixelated }
+svg.imview_svg { position: absolute; left: 0; top: 0; margin: 0; padding: 0; border: 0;
+                 pointer-events: none; z-index: 2 }

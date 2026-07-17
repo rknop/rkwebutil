@@ -1,7 +1,7 @@
-FROM rknop/devuan-daedalus-rknop
+FROM debian:trixie-20260713
 LABEL maintainer="Rob Knop <rknop@pobox.com>"
 
-ENV PGVERSION=15
+ENV PGVERSION=17
 
 ENV DEBIAN_FRONTEND=noninteractive
 
