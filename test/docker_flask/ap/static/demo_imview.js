@@ -13,14 +13,14 @@ class demo_imview {
         this.connector.sendHttpRequestGetRaw( "gimmeimage", {},
                                               function(d) { self.showimage(d) },
                                               function(e) { self.omg(e) } );
-    }        
-    
+    }
+
     omg() {
         window.alert( "Bad things have happened." );
     }
 
     showimage( data ) {
-        console.log( "Got data, length " + data.byteLength );
+        let self = this;
         let dv = new DataView( data );
         let height = dv.getUint16( 0, true );
         let width = dv.getUint16( 2, true );
@@ -28,10 +28,15 @@ class demo_imview {
         this.imview = new ImView( { "data": image,
                                     "width": width,
                                     "height": height,
-                                    "parent": this.parent
+                                    "parent": this.parent,
+                                    "clickcallback": (x,y) => { self.addsquare(x,y) }
                                   } );
     }
-        
+
+    addsquare( imgx, imgy ) {
+        this.imview.addsquare( imgx, imgy );
+    }
+
 }
 
 // **********************************************************************

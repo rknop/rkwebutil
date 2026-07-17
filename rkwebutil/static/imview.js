@@ -12,6 +12,7 @@ class ImView {
     // scale is in display pixels per data pixel
 
     static numImViews = 0;
+    static numSquares;
 
     constructor( inparams={} ) {
         var self = this;
@@ -28,11 +29,12 @@ class ImView {
                         "parent": null,
                         "min": null,
                         "max": null,
-                        "name": null
+                        "name": null,
+                        "clickcallback": null
                       };
         Object.assign( this.params, inparams )
         for ( let field of [ 'data', 'width', 'height', 'dispwidth', 'dispheight',
-                             'x0', 'y0', 'scale', 'parent', 'min', 'max', 'name' ] ) {
+                             'x0', 'y0', 'scale', 'parent', 'min', 'max', 'name', 'clickcallback' ] ) {
             this[field] = this.params[field]
         }
         if ( this.name == null ) {
@@ -110,6 +112,14 @@ class ImView {
         }
         this.y0 = this.init_y0;
 
+        this.squares = [];
+        this.zoombox = null;
+        this.zooming = false;
+        this.dragging = false;
+        this.initmousex = -99999;
+        this.initmousey = -99999;
+        this.mousemovecallback = function(e) { self.mousemove(e); };
+
         this.div = rkWebUtil.elemaker( "div", this.parent );
         // ...I must be overdoing this.  There must be a better way to get the flexbox model
         //   do what I want.
@@ -139,6 +149,7 @@ class ImView {
                                           } );
         this.canvas.style.width = this.dispwidth.toString() + "px";
         this.canvas.style.height = this.dispheight.toString() + "px";
+        this.canvas.addEventListener( "mousedown", (e) => { self.mousedown(e) } );
         this.canvas.addEventListener( "mouseup", (e) => { self.mouseup(e); } );
 
         let ns = "http://www.w3.org/2000/svg";
@@ -182,14 +193,6 @@ class ImView {
 
         this.ctx = this.canvas.getContext( "2d" );
         this.render_image();
-
-        this.zoombox = null;
-        this.zooming = false;
-        this.initmousex = -99999;
-        this.initmousey = -99999;
-        this.canvas.addEventListener( "mousedown", (e) => { self.mousedown(e) } );
-        this.mousemovecallback = function(e) { self.mousemove(e); };
-        this.dragging = false;
     }
 
 
@@ -315,21 +318,32 @@ class ImView {
         this.zoombox = null;
 
         let ns = "http://www.w3.org/2000/svg";
+        // Make sure the svg has the defined box colors
         let svgstyle = document.createElementNS( ns, "style" );
         this.svg.appendChild( svgstyle );
-        svgstyle.appendChild( document.createTextNode( ".greenbox-" + this.name +
+        svgstyle.appendChild( document.createTextNode( ".zoombox-" + this.name +
+                                                       " { fill: none; stroke: #008800; stroke-width: 2; }" ) );
+        svgstyle.appendChild( document.createTextNode( ".red-" + this.name +
+                                                       " { fill: none; stroke: #cc0000; stroke-width: 2; }" ) );
+        svgstyle.appendChild( document.createTextNode( ".green-" + this.name +
                                                        " { fill: none; stroke: #00cc00; stroke-width: 2; }" ) );
+        svgstyle.appendChild( document.createTextNode( ".blue-" + this.name +
+                                                       " { fill: none; stroke: #2244cc; stroke-width: 2; }" ) );
 
-        // ****
-        // let rect = document.createElementNS( ns, "rect" );
-        // rect.setAttribute( "class", "greenbox-" + this.name );
-        // rect.setAttribute( "x", 200 );
-        // rect.setAttribute( "y", 250 );
-        // rect.setAttribute( "width", 200 );
-        // rect.setAttribute( "height", 100 );
-        // this.svg.appendChild( rect );
-        // ****
-
+        // Draw all squares
+        for ( let square of this.squares ) {
+            let rect = document.createElementNS( ns, "rect" );
+            let dispx = ( square.x - this.x0 ) * this.scale;
+            let dispy = this.dispheight - ( square.y - this.y0 ) * this.scale;
+            let dispwid = square.width * this.scale;
+            square.svgobj = document.createElementNS( ns, "rect" );
+            square.svgobj.setAttribute( "x", dispx - dispwid / 2. );
+            square.svgobj.setAttribute( "y", dispy - dispwid / 2. );
+            square.svgobj.setAttribute( "width", dispwid );
+            square.svgobj.setAttribute( "height", dispwid );
+            square.svgobj.setAttribute( "class", square.color + "-" + this.name );
+            this.svg.appendChild( square.svgobj );
+        }
     }
 
 
@@ -383,7 +397,7 @@ class ImView {
             }
             let ns = "http://www.w3.org/2000/svg";
             this.zoombox = document.createElementNS( ns, "rect" );
-            this.zoombox.setAttribute( "class", "greenbox-" + this.name );
+            this.zoombox.setAttribute( "class", "zoombox-" + this.name );
             let x0 = this.initmousex;
             if ( dispx < this.initmousex ) x0 = dispx;
             let y0 = this.initmousey;
@@ -438,24 +452,54 @@ class ImView {
             let imgy = ( this.dispheight - dispy ) / this.scale + this.y0;
             this.xwidget.value = imgx.toFixed( 2 );
             this.ywidget.value = imgy.toFixed( 2 );
-            imgx = Math.round( imgx );
-            imgy = Math.round( imgy );
-            if ( ( imgx < 0 ) || ( imgx >= this.width ) || ( imgy < 0 ) || ( imgy >= this.height ) ) {
+            let iimgx = Math.round( imgx );
+            let iimgy = Math.round( imgy );
+            if ( ( iimgx < 0 ) || ( iimgx >= this.width ) || ( iimgy < 0 ) || ( iimgy >= this.height ) ) {
                 this.valwidget.value = "";
             }
             else {
                 this.valwidget.value = rkWebUtil.floatToString(
-                    this.data.getFloat32( 4 * ( imgy * this.width + imgx ), true ),
+                    this.data.getFloat32( 4 * ( iimgy * this.width + iimgx ), true ),
                     4 );
             }
 
             // If shift-click, or if middle-click, then recenter
             if ( ( ( evt.button == 0 ) && ( evt.shiftKey ) ) || ( evt.button == 1 ) ) {
-                this.x0 = imgx - this.dispwidth / 2. / this.scale;
-                this.y0 = imgy - this.dispheight / 2. / this.scale;
+                this.x0 = iimgx - this.dispwidth / 2. / this.scale;
+                this.y0 = iimgy - this.dispheight / 2. / this.scale;
                 this.render_image();
             }
+
+            // External callback
+            if ( this.clickcallback != null ) {
+                this.clickcallback( imgx, imgy );
+            }
         }
+    }
+
+
+    addsquare( x, y, width="10", color="blue", name=null ) {
+        if ( name == null ) {
+            name = "imview-square-" + ImView.numSquares;
+        }
+        ImView.numSquares += 1;
+
+        // TODO VALIDATE COLOR
+
+        let square = { "name": name, "x": x, "y": y, "width": width, "color": color };
+        let ns = "http://www.w3.org/2000/svg";
+        let rect = document.createElementNS( ns, "rect" );
+        let dispx = ( x - this.x0 ) * this.scale;
+        let dispy = this.dispheight - ( y - this.y0 ) * this.scale;
+        let dispwid = width * this.scale;
+        square.svgobj = document.createElementNS( ns, "rect" );
+        square.svgobj.setAttribute( "x", dispx - dispwid / 2. );
+        square.svgobj.setAttribute( "y", dispy - dispwid / 2. );
+        square.svgobj.setAttribute( "width", dispwid );
+        square.svgobj.setAttribute( "height", dispwid );
+        square.svgobj.setAttribute( "class", color + "-" + this.name );
+        this.svg.appendChild( square.svgobj );
+        this.squares.push( square );
     }
 }
 
