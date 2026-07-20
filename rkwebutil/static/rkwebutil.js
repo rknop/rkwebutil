@@ -1011,18 +1011,25 @@ rkWebUtil.Connector = class
         // If in progress, just continue
         if ( request.readyState != 4 ) return;
 
-        if ( request.status != 200 ) {
-            let errmsg = "Request came back with status " + request.status.toString() + ": " + request.responseText;
-            if ( errorhandler != null ) {
-                errorhandler( { "error":  errmsg } );
+        if ( request.status == 200 ) {
+            handler( request.response );
+        }
+        else {
+            let rtext;
+            if ( request.responseType == "arraybuffer" ) {
+                let decoder = new TextDecoder();
+                rtext = decoder.decode( request.response )
             }
             else {
-                window.alert( errmsg );
+                rtext = request.responseText;
             }
-            if ( finalcall != null ) finalcall();
+            let errmsg = "Request came back with status " + request.status.toString() + ": " + rtext;
+            if ( errorhandler != null )
+                errorhandler( { "error":  errmsg } );
+            else
+                window.alert( errmsg );
         }
 
-        handler( request.response );
         if ( finalcall != null ) finalcall();
     }
 }

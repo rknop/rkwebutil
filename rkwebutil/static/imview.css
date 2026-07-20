@@ -39,9 +39,9 @@ body { color: var(--main-color);
 .insetborder { border-style: inset;
                border-color: var(--mostlyfull-color-border);
              }
-.insetborder { border-style: outset;
-               border-color: var(--mostlyfull-color-border);
-             }
+.outsetborder { border-style: outset;
+                border-color: var(--mostlyfull-color-border);
+              }
 
 div.hbox { display: flex;
            flex-direction: row;
