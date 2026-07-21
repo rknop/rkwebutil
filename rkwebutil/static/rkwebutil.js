@@ -149,7 +149,7 @@ rkWebUtil.floatToString = function( f, decimals=3 )
     if ( decimals < 1 ) decimals = 1;
     if ( decimals > 10 ) decimals = 10;
     let absf = Math.abs( f );
-    if ( ( absf >= Math.pow(10., decimals) ) || ( absf <= Math.pow(10., -decimals) ) ) {
+    if ( ( absf >= Math.pow(10., decimals+1) ) || ( absf <= Math.pow(10., -decimals-1) ) ) {
         return f.toExponential( decimals );
     } else {
         return f.toFixed( decimals );

@@ -7,8 +7,6 @@ class ImView {
     // The assumption is that pixel (0,0) is the lower-left,
     //    which is backwards from html display
 
-    // data must be a Float32Array
-
     // scale is in display pixels per data pixel
 
     static numImViews = 0;
@@ -18,25 +16,35 @@ class ImView {
         var self = this;
         let hbox, vbox, but;
 
-        this.params = { "data": null,
-                        "width": null,
-                        "height": null,
-                        "dispwidth": 600,
-                        "dispheight": 600,
-                        "x0": null,
-                        "y0": null,
-                        "scale": null,
-                        "parent": null,
-                        "min": null,
-                        "max": null,
-                        "name": null,
-                        "clickcallback": null
-                      };
-        Object.assign( this.params, inparams )
-        for ( let field of [ 'data', 'width', 'height', 'dispwidth', 'dispheight',
-                             'x0', 'y0', 'scale', 'parent', 'min', 'max', 'name', 'clickcallback' ] ) {
-            this[field] = this.params[field]
+        let defaults = { "data": null,
+                         "width": null,
+                         "height": null,
+                         "dispwidth": 600,
+                         "dispheight": 600,
+                         "x0": null,
+                         "y0": null,
+                         "scale": null,
+                         "parent": null,
+                         "min": null,
+                         "max": null,
+                         "zscale_samples": 10000,
+                         "zscale_contrast": 0.25,
+                         "name": null,
+                         "clickcallback": null
+                       };
+        let unknown = [];
+        for ( let kw in inparams ) if ( ! defaults.hasOwnProperty(kw) ) unknown.push( kw )
+        if ( unknown.length > 0 ) {
+            window.alert( "ERROR: Unknown parameters passed to ImView: " + unknown.toString() );
+            return;
         }
+        for ( let param in defaults ) {
+            if ( inparams.hasOwnProperty(param) )
+                this[param] = inparams[param];
+            else
+                this[param] = defaults[param];
+        }
+
         if ( this.name == null ) {
             this.name = "imview-" + ImView.numImViews.toString();
         }
@@ -48,6 +56,7 @@ class ImView {
         }
 
         this.ndata = this.width * this.height;
+        this.zscale_samples = Math.min( this.zscale_samples, this.ndata );
 
         if ( ! ( this.data instanceof DataView ) ) {
             window.alert( "ImView: data must be a DataView" );
@@ -60,34 +69,14 @@ class ImView {
             return;
         }
 
-        let tot = 0.;
-        let tot2 = 0.;
-        let n = 0;
-        for ( let i = 0 ; i < this.ndata ; ++i ) {
-            let val = this.data.getFloat32( 4*i, true )
-            if ( ! isNaN(val) ) {
-                tot += val;
-                tot2 += val * val;
-                n += 1;
-            }
-        }
-        if ( n == 0 ) {
-            this.mean = 0;
-            this.sdev = 1.;
-        }
-        else {
-            this.mean = tot / n;
-            this.sdev = Math.sqrt( ( tot2 / n ) - ( this.mean * this.mean ) );
-        }
+        let tmp = this.zscale( this.zscale_samples, this.zscale_contrast );
+        this.zmin = tmp[0];
+        this.zmax = tmp[1];
 
         this.init_min = this.min;
         this.init_max = this.max;
-        if ( this.init_min == null ) {
-            this.init_min = this.mean - 5. * this.sdev;
-        }
-        if ( this.init_max == null ) {
-            this.init_max = this.mean + 5. * this.sdev;
-        }
+        if ( this.init_min == null ) this.init_min = this.zmin;
+        if ( this.init_max == null ) this.init_max = this.zmax;
         this.min = this.init_min;
         this.max = this.init_max;
 
@@ -181,6 +170,11 @@ class ImView {
                                                "classes": [ 'outsetborder' ] } );
         but = rkWebUtil.button( buttondiv, "Redraw", function() { self.set_stretch_and_render(); } );
         but.classList.add( "marginleftex" );
+        but = rkWebUtil.button( buttondiv, "Reset Stretch", function() { self.reset_stretch(); } );
+        but.classList.add( "marginleftex" );
+        but = rkWebUtil.button( buttondiv, "ZScale", function() { self.zscale_stretch(); } );
+        but.classList.add( "marginleftex" );
+
 
         buttondiv = rkWebUtil.elemaker( "div", vbox, { "classes": [ 'hbox', 'justifycenter' ] } );
         rkWebUtil.button( buttondiv, "Reset Zoom", function() { self.reset_zoom(); } );
@@ -196,6 +190,216 @@ class ImView {
     }
 
 
+    // The next three functions where stolen from
+    //   https://github.com/spacetelescope/stsci.numdisplay/blob/master/lib/stsci/numdisplay/zscale.py
+    // and converted to Javascript.  That GIT Archive has a BSD like licence with:
+    //   Copyright (C) 2005 Association of Universities for Research in Astronomy (AURA)
+
+    static MAX_REJECT = 0.5;
+    static MIN_NPIXELS = 5;
+    static GOOD_PIXEL = 0;
+    static BAD_PIXEL = 1;
+    static KREJ = 2.5;
+    static MAX_ITERATIONS = 5;
+
+    zscale( nsamples=1000, contrast=0.25 ) {
+        // Implement IRAF zscale algorithm
+
+        let samples = this.zsc_sample( nsamples );
+        let npix = samples.length;
+        samples.sort();
+        let zmin = samples.at( 0 )
+        let zmax = samples.at( samples.length - 1 );
+        let center_pixel = Math.floor( ( npix - 1 ) / 2 );
+        let median = samples.at( center_pixel );
+        if ( npix % 2 == 0 )
+            median = 0.5 * ( median + samples.at(center_pixel + 1) );
+        let minpix = Math.max( ImView.MIN_NPIXELS, Math.floor( npix * ImView.MAX_REJECT ) );
+        let ngrow = Math.max( 1, Math.floor( npix * 0.01 ) );
+        let tmp = this.zsc_fit_line( samples, npix, ImView.KREJ, ngrow, ImView.MAX_ITERATIONS );
+        let ngoodpix = tmp.ngoodpix;
+        let zstart = tmp.zstart;
+        let zslope = tmp.zslope;
+
+        let z1 = zmin;
+        let z2 = zmax;
+        if ( ngoodpix >= minpix ) {
+            if ( contrast > 0 ) zslope = zslope / contrast;
+            z1 = Math.max( zmin, median - (center_pixel - 1) * zslope );
+            z2 = Math.min( zmax, median + (npix - center_pixel) * zslope );
+        }
+        return [ z1, z2 ];
+    }
+
+    zsc_sample( maxpix ) {
+        // Figure out which pixels to use for the zscale algorithm
+        // Returns the 1-d array samples
+        // Sample in a square grid, and return the first maxpix in the sample
+        //
+        // RKNOP 2026-07-21 : modified this a bit from the stsci python source.
+        //   Want to build around the center rather than the lower left.
+        //   This is probably overdone, but whatevs.
+        let samples = [];
+        let stride;
+        if ( this.height > this.width ) stride = Math.round( this.width / Math.sqrt(maxpix) );
+        else stride = Math.round( this.height / Math.sqrt(maxpix) );
+        stride = Math.max( stride, 1 );
+        let nx = Math.floor( this.width / stride );
+        let ny = Math.floor( this.height / stride );
+        if ( nx * ny < maxpix ) maxpix = nx * ny;
+        let x0 = Math.floor( stride * nx / 2. );
+        let y0 = Math.floor( stride * ny / 2. );
+        let y = y0
+        let dy = stride;
+        while ( ( y >= 0 ) && ( y <= this.height ) ) {
+            let off = y * this.width;
+            let x = x0;
+            let dx = stride;
+            while ( ( x >= 0 ) && ( x <= this.width ) ) {
+                let val = this.data.getFloat32( 4 * (off + x), true );
+                if ( ! isNaN(val) ) samples.push( val );
+                if ( samples.length >= maxpix )
+                    break;
+                if ( x <= x0 ) x += dx; else x -= dx;
+                dx += stride;
+            }
+            if ( samples.length >= maxpix )
+                break;
+            if ( y <= y0 ) y += dy; else y -= dy;
+            dy += stride;
+        }
+        if ( samples.length > maxpix ) {
+            window.alert( "ERROR: This should never happen." )
+            return;
+        }
+
+        return new Float32Array( samples );
+    }
+
+    zsc_fit_line( samples, npix, krej, ngrow, maxiter ) {
+        let intercept, slope;
+
+        // First re-map indices from -1.0 to 1.0
+        let xscale = 2.0 / ( npix - 1 );
+        let xnorm = new Float32Array( samples.length );
+        for ( let i=0 ; i < samples.length ; i+=1 ) xnorm.set( [ i * xscale - 1.0 ], i );
+
+        let minpix = Math.max( ImView.MIN_NPIXELS, Math.floor( npix * ImView.MAX_REJECT ) );
+        let ngoodpix = npix;
+        let last_ngoodpix = npix + 1;
+
+        // This is the mask used in k-sigma clipping.  0 (ImView.GOOD_PIXEL) is good, 1 (ImView.BAD_PIXEL) is bad
+        let badpix = new Int16Array( samples.length );
+        badpix.fill( ImView.GOOD_PIXEL )
+
+        for ( let n=0 ; n < maxiter ; n+=1 ) {
+            if ( (ngoodpix >= last_ngoodpix) || (ngoodpix < minpix) )
+                break;
+            last_ngoodpix = ngoodpix;
+
+            // Accumulate sums to calculate straight line fit
+            let sumx = 0.;
+            let sumxx = 0.;
+            let sumxy = 0.;
+            let sumy = 0.;
+            let sum = 0.;
+            for ( let i=0 ; i<xnorm.length ; i+=1 ) {
+                if ( badpix.at(i) == ImView.GOOD_PIXEL ) {
+                    sumx += xnorm.at(i);
+                    sumxx += xnorm.at(i) ** 2;
+                    sumxy += xnorm.at(i) * samples.at(i);
+                    sumy += samples.at(i);
+                    sum += 1;
+                }
+            }
+
+            let delta = sum * sumxx - sumx * sumx;
+            // Slope and intercept
+            intercept = (sumxx * sumy - sumx * sumxy) / delta;
+            slope = (sum * sumxy - sumx * sumy) / delta;
+
+            // Subtract fitted line from the data array
+            let flat = new Float32Array( xnorm.length );
+            for ( let i=0 ; i < samples.length ; i+=1 )
+                flat.set( [ samples.at(i) - ( xnorm.at(i) * slope + intercept ) ], i )
+
+            // Compute the k-sigma rejection threshold
+            let tmp = this.zsc_compute_sigma( flat, badpix, npix );
+            let threshold = tmp.sigma * krej;
+
+            // Detect and reject pixels further than k*sigma from the fitted line
+            for ( let i=0 ; i<flat.length ; i+=1 )
+                if ( ( flat.at(i) < -threshold ) || ( flat.at(i) > threshold ) )
+                    badpix.set( [ ImView.BAD_PIXEL ], i );
+
+            // Convolve with a kernel of length ngrow
+            let newbadpix = new Int16Array( badpix.length );
+            newbadpix.fill( ImView.GOOD_PIXEL );
+            ngoodpix = 0;
+            for ( let i = 0 ; i < badpix.length ; i += 1 ) {
+                let j0 = Math.max( 0, i - ngrow );
+                let j1 = Math.min( badpix.length, i + ngrow );
+                let isbad = false;
+                for ( let j = j0; j < j1 ; j += 1 ) {
+                    if ( badpix.at(j) == ImView.BAD_PIXEL ) {
+                        isbad = true;
+                        break;
+                    }
+                }
+                if ( isbad )
+                    newbadpix.set( [ ImView.BAD_PIXEL ], i );
+                else
+                    ngoodpix += 1;
+            }
+            badpix = newbadpix;
+        }
+
+        return { 'ngoodpix': ngoodpix,
+                 'zstart': intercept - slope,
+                 'zslope': slope * xscale };
+    }
+
+
+    zsc_compute_sigma( flat, badpix, npix ) {
+        let mean, sigma;
+
+        // Compute the rms deviation from the mean of a flattened array.
+        // Ignore rejected pixels
+
+        let sumz = 0.;
+        let sumsq = 0.;
+        let n = 0;
+        for ( let i=0 ; i<flat.length; i+=1 ) {
+            if ( badpix.at(i) == ImView.GOOD_PIXEL ) {
+                sumz += flat.at(i);
+                sumsq += flat.at(i) ** 2;
+                n += 1;
+            }
+        }
+
+        if ( n == 0 ) {
+            mean = null;
+            sigma = null;
+        }
+        else if ( n == 1 ) {
+            mean = sumz;
+            sigma = null;
+        }
+        else {
+            mean = sumz / n;
+            sigma = sumsq / ( n - 1 ) - sumz * sumz / ( n * (n-1) );
+            if ( sigma < 0. )
+                sigma = 0.;
+            else
+                sigma = Math.sqrt( sigma );
+        }
+
+        return { 'ngoodpix': n,
+                 'mean': mean,
+                 'sigma': sigma };
+    }
+
+
     change_stretch( min, max ) {
         this.min = min;
         this.max = max;
@@ -206,6 +410,13 @@ class ImView {
     reset_stretch() {
         this.min = this.init_min;
         this.max = this.init_max;
+        this.render_image();
+    }
+
+
+    zscale_stretch() {
+        this.min = this.zmin;
+        this.max = this.zmax;
         this.render_image();
     }
 

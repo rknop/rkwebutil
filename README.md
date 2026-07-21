@@ -6,7 +6,11 @@ Several utilities useful for web applications (and maybe some other things):
 * config.py : a python config system that reads yaml files which can override each other
 * rkauth : an authentication system for webaps using flask, flask-session, and Postgres
 
-rkwebutil is (c) 2023-2024 by Robert Knop, and is available under the BSD 3-clause license (see LICENSE)
+rkwebutil is (c) 2023-2026 by Robert Knop, and is available under the BSD 3-clause license (see LICENSE)
+
+Other software used:
+
+* Modified zscale from stsci.numdisplay : https://github.com/spacetelescope/stsci.numdisplay; that has a BSD-like license with Copyright (C) 2005 Association of Universities for Research in Astronomy (AURA)
 
 ---
 
