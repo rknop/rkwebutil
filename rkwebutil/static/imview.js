@@ -12,7 +12,7 @@ class ImView {
     static numImViews = 0;
     static numSquares;
 
-    constructor( inparams={} ) {
+    constructor( inparams={}, norender=false ) {
         var self = this;
         let hbox, vbox, but;
 
@@ -125,6 +125,7 @@ class ImView {
         rkWebUtil.elemaker( "span", this.infodiv, { "text": "  value:", "classes": [ 'bold' ] } );
         this.valwidget = rkWebUtil.elemaker( "input", this.infodiv, { "attributes": { 'size': 10,
                                                                                       'readonly': 1 } } );
+        this.top_buttonbox = tophbox;
 
         hbox = rkWebUtil.elemaker( "div", vbox, { "classes": [ "hbox", "justifyleft" ] } );
         this.canvasdiv = rkWebUtil.elemaker( "div", hbox, { "classes": [ 'imview_canvasdiv' ] } );
@@ -174,6 +175,7 @@ class ImView {
         but.classList.add( "marginleftex" );
         but = rkWebUtil.button( buttondiv, "ZScale", function() { self.zscale_stretch(); } );
         but.classList.add( "marginleftex" );
+        this.stretch_buttonbox = buttondiv;
 
 
         buttondiv = rkWebUtil.elemaker( "div", vbox, { "classes": [ 'hbox', 'justifycenter' ] } );
@@ -184,9 +186,11 @@ class ImView {
         but.classList.add( "marginleftex" );
         but = rkWebUtil.button( buttondiv, "Zoom Out", function() { self.zoom_out(); } );
         but.classList.add( "marginleftex" );
+        this.zoom_buttonbox = buttondiv;
 
         this.ctx = this.canvas.getContext( "2d" );
-        this.render_image();
+
+        if ( ! norender ) this.render_image();
     }
 
 
@@ -649,7 +653,9 @@ class ImView {
             let ctry = ( imgy0 + imgy1 ) / 2.;
             let width = Math.abs( imgx1 - imgx0 );
             let height = Math.abs( imgy1 - imgy0 );
-            if ( ( this.dispehight / height ) < ( this.dispwidth / width ) ) {
+            let oldheight = this.dispheight / this.scale;
+            let oldwidth = this.dispwidth / this.scale;
+            if ( ( oldheight / height ) < ( oldwidth / width ) ) {
                 this.scale = this.dispheight / height;
             } else {
                 this.scale = this.dispwidth / width;
