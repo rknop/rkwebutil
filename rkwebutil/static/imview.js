@@ -690,6 +690,9 @@ class ImView {
 
 
     addsquare( x, y, width="10", color="blue", name=null ) {
+        // Does NOT rerender.  Must call render_image manually after
+        //   calling a bunch of addsquare
+
         if ( name == null ) {
             name = "imview-square-" + ImView.numSquares;
         }
