@@ -439,6 +439,34 @@ rkWebUtil.hideOrShow = function( widget, parameter, hideparams, showparams, disp
 }
 
 // **********************************************************************
+
+rkWebUtil.hideOrShowButton = function( parent, hideablewidget, textafterhideshow,
+                                       startshown=true, displaytype="block" ) {
+    var button = document.createElement( "input" );
+    button.setAttribute( "type", "button" );
+    let title = startshown ? "Hide" : "Show";
+    if ( ( textafterhideshow != null ) && ( textafterhideshow.length > 0 ) )
+        title += " " + textafterhideshow;
+    button.setAttribute( "value", title );
+    button.addEventListener( "click", function() {
+        let buttext;
+        if ( button.value.substring(0, 4) == "Hide" ) {
+            buttext = "Show";
+            hideablewidget.style.display = "none";
+        } else {
+            buttext = "Hide";
+            hideablewidget.style.display = displaytype;
+        }
+        if ( ( textafterhideshow != null ) && ( textafterhideshow.length > 0 ) )
+            buttext += " " + textafterhideshow;
+        button.setAttribute( "value", buttext );
+    } );
+    if ( parent != null ) parent.appendChild( button );
+    return button;
+}
+
+
+// **********************************************************************
 // Javascript's atob and btoa functions are disasters.  They don't
 //   actually properly convert binary, they do weird things with and to
 //   strings.  They certainly don't produce things you could send
@@ -1032,7 +1060,48 @@ rkWebUtil.Connector = class
 
         if ( finalcall != null ) finalcall();
     }
+
+    // This next function is probably how I should have done it all along instead of all the stuff above
+    httpPromise( appcommand, json=null, retjson=true ) {
+        return new Promise( (resolve, reject) => {
+            let req = new XMLHttpRequest();
+            if ( ( this.app.substring( this.app.length -1 ) == '/' ) && ( appcommand.substring( 0 , 1 ) == '/' ) )
+                appcommand = appcommand.substring( 1 );
+            req.open( "POST", this.app + appcommand );
+            req.onload = (e) => {
+                if ( retjson ) {
+                    try {
+                        var statedata = JSON.parse( req.responseText );
+                    } catch ( err ) {
+                        window.alert( "Error parsing JSON! (" + err + ")" );
+                        console.trace();
+                        console.log( req.responseText );
+                        reject( { "error": "Error parsing JSON! (" + err + ")" } );
+                    }
+                    if ( statedata.hasOwnProperty( "error" ) ) {
+                        reject( statedata );
+                        return;
+                    }
+                    resolve( statedata );
+                } else {
+                    resolve( req.response );
+                };
+            };
+            req.onerror = (e) => {
+                reject( { "error": "HTTP status: " + req.status } );
+            };
+            if ( ! retjson ) req.responseType = 'arraybuffer';
+            if ( json != null ) {
+                req.setRequestHeader( "Content-Type", "application/json" );
+                req.send( JSON.stringify( json ) );
+            } else {
+                req.send();
+            }
+        } );
+    }
+
 }
+
 
 // **********************************************************************
 // I'm honestly not sure how I want to format text, but I THINK I
