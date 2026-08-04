@@ -64,7 +64,7 @@ class ImView {
         }
         if ( this.data.byteLength != ( this.ndata * 4 ) ) {
             window.alert( "Imview: data array length " + this.data.byteLength.toString() +
-                          "doesn't match width × height × 4 " + this.width.toString() +
+                          " doesn't match width × height × 4 = " + this.width.toString() +
                           " × " + this.height.toString() + " × 4" );
             return;
         }
