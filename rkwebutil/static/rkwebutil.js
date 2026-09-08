@@ -31,7 +31,15 @@ rkWebUtil.elemaker = function( elemtype, parent, inprops )
                   change:null,
                   classes: null,
                   attributes: null,
-                  svg:false };
+                  svg: false };
+    let given_inprops = new Set( Object.getOwnPropertyNames( inprops ) );
+    let known_props = new Set( Object.getOwnPropertyNames( props ) );
+    let diff_props = given_inprops.difference( known_props );
+    if ( diff_props.size > 0 ) {
+        window.alert( "Error, unknown properties given to elemaker: " + Array.from(diff_props).join(', ') );
+        return;
+    }
+
     Object.assign( props, inprops );
     var id = props.id;
     var text = props.text;
