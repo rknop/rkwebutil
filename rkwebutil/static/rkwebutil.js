@@ -849,9 +849,10 @@ rkWebUtil.SortableTable = class
 
 rkWebUtil.Connector = class
 {
-    constructor( app )
+    constructor( app, customreqheaders=null )
     {
         this.app = app;
+        this.customreqheaders = customreqheaders;
     }
 
     // **********************************************************************
@@ -931,6 +932,11 @@ rkWebUtil.Connector = class
         req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler=errorhandler,
                                                                       finalcall=finalcall ) };
         req.setRequestHeader( "Content-Type", "application/json" );
+        if ( this.customreqheaders != null ) {
+            for ( let key in this.customreqheaders ) {
+                req.setRequestHeader( key, this.customreqheaders[key] );
+            }
+        }
         req.send( JSON.stringify( data ) );
     }
 
@@ -995,6 +1001,27 @@ rkWebUtil.stripparagraphtags = function(text)
     newtext = newtext.replace(veryendpar, "");
 
     return newtext;
+}
+
+
+// **********************************************************************
+// Some basic HTML fixers
+
+rkWebUtil.escapeHTML = function(text)
+{
+    var amp = /&/g;
+    var lt = /</g;
+    var gt = />/g;
+    var qt = /'/g;
+    var dblqt = /"/g;
+
+    return ( text
+             .replace( amp, "&amp;" )
+             .replace( lt, "&lt;" )
+             .replace( gt, "&gt;" )
+             .replace( qt, "&quot;" )
+             .replace( dblqt, "&#039;" )
+           )
 }
 
 // **********************************************************************
