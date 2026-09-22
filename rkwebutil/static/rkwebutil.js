@@ -94,11 +94,23 @@ rkWebUtil.elemaker = function( elemtype, parent, inprops )
 
 // **********************************************************************
 
-rkWebUtil.button = function( parent, title, callback )
+rkWebUtil.button = function( parent, title, callback, classes=null, attributes=null )
 {
     var button = document.createElement( "input" );
     button.setAttribute( "type", "button" );
     button.setAttribute( "value", title );
+    if ( attributes != null ) {
+        for ( let attr in attributes ) {
+            if ( attributes.hasOwnProperty( attr ) ) {
+                button.setAttribute( attr, attributes[attr] );
+            }
+        }
+    }
+    if ( classes != null ) {
+        for ( let classname of classes ) {
+            elem.classList.add( classname );
+        }
+    }
     button.addEventListener( "click", callback );
     if ( parent != null ) parent.appendChild( button );
     return button;
