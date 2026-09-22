@@ -154,6 +154,30 @@ rkWebUtil.popupMenu = function( items, callbacks, classes, title=null, titleclas
 
 
 // **********************************************************************
+// Useful for validating number inputs
+
+rkWebUtil.parseIntInRange = function( val, min=null, max=null, def=null )
+{
+    if ( ( min != null ) && ( max != null ) && ( min > max ) ) {
+        throw "min (" + min + ") > max (" + max + ")";
+    }
+    let parsed = parseInt( val );
+    if ( isNaN(parsed) ) {
+        if ( def != null ) {
+            return def;
+        }
+        throw "Can't parse " + val + " to an integer.";
+    }
+    else {
+        if ( ( min != null ) && ( parsed < min ) ) parsed = min;
+        if ( ( max != null ) && ( parsed > max ) ) parsed = max;
+    }
+    return parsed;
+}
+
+
+
+// **********************************************************************
 // If I ever get a date that doesn't start "2020-07-15 07:42:00" (with
 // any old character in place of the space), I'm in trouble.  Alas,
 // I haven't found a reliable library routine to do this, because
@@ -1035,6 +1059,29 @@ rkWebUtil.escapeHTML = function(text)
              .replace( dblqt, "&#039;" )
            )
 }
+
+// **********************************************************************
+// Formatting numbers that might be null, getting "" for null
+
+rkWebUtil.fixedOrEmpty = function( val, digits=4 )
+{
+    if ( val === null ) {
+        return "";
+    } else {
+        return val.toFixed( digits );
+    }
+}
+
+
+rkWebUtil.exponentialOrEmpty = function( val, digits=4 )
+{
+    if ( val === null ) {
+        return "";
+    } else {
+        return val.toExponential( digits );
+    }
+}
+
 
 // **********************************************************************
 // **********************************************************************
