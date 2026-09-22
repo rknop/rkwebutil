@@ -1478,7 +1478,7 @@ SVGPlot.Plot.prototype.mousemoved = function( event )
         }
         else {
             y = this.zoomfinalpt.y;
-            height = this.zoomfinalpt.y - y
+            height = this.zoominitpt.y - y
         }
         this.zoombox.setAttribute( "x", x );
         this.zoombox.setAttribute( "y", y );

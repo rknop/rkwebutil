@@ -1084,6 +1084,33 @@ rkWebUtil.exponentialOrEmpty = function( val, digits=4 )
 
 
 // **********************************************************************
+// Format integer with commas
+
+rkWebUtil.commafyInt = function( val )
+{
+    val = parseInt( val ).toString();
+    let lastdex = val.length;
+    let dex = val.length - 3;
+    let retval = null;
+    while ( dex > 0 ) {
+        if ( val[dex] == '-' ) break;
+        if ( retval === null ) {
+            retval = val.substring( dex, lastdex );
+        } else {
+            retval = val.substring( dex, lastdex ) + "," + retval;
+        }
+        lastdex = dex;
+        dex -= 3;
+    }
+    if ( retval === null ) {
+        retval = val;
+    } else {
+        retval = val.substring( dex, lastdex ) + "," + retval;
+    }
+    return retval;
+}
+
+// **********************************************************************
 // **********************************************************************
 // **********************************************************************
 // Class for creating a tabbed div.  To work, the css must have defined
