@@ -132,7 +132,7 @@ SVGPlot.generateTickValues = function( min, max, sp )
 //     id of the svg document element.  Defaults to "svgpltosvg-{name}".
 //
 //
-//   showerrorbar : true
+//   showerrbar : true
 //     Boolean, show error bars if they exist.  (Non-existent error bars won't be shown in any event....)
 //
 //   title : string
@@ -274,6 +274,9 @@ SVGPlot.generateTickValues = function( min, max, sp )
 //     that each plot has an automatically determined default vertical scale.
 //     (This may be ignored if zoommode is not "default"; ROB check this.)
 //
+//   manuallimits : bool
+//      If true, add a line of widgets that lets the user set the plot range manually.
+//
 //   nosuppresszerox : bool
 //     If true, will make sure that 0 is included in the default x range.  Ignored if you set
 //     an xmin in defaultlimits.
@@ -307,6 +310,8 @@ SVGPlot.generateTickValues = function( min, max, sp )
 
 SVGPlot.Plot = function( inparams = {} )
 {
+    var self = this;
+
     this.params = { "name": null,
                     "divid": null,
                     "svgid": null,
@@ -360,6 +365,7 @@ SVGPlot.Plot = function( inparams = {} )
                     "nozoomdocstring": false,
                     "zoommode": "full",
                     "defaultlimits": [],
+                    "manuallimits": false,
                     "nosuppresszerox": false,
                     "nosuppresszeroy": false,
                   };
@@ -385,7 +391,6 @@ SVGPlot.Plot = function( inparams = {} )
     this.docbox.setAttribute( "class", "svgplotdocbox" )
     hbox.appendChild( this.docbox );
 
-    var self = this;
     var button = document.createElement( "button" );
     button.appendChild( document.createTextNode( "Zoom Default" ) );
     this.buttonbox.appendChild( button );
@@ -401,6 +406,32 @@ SVGPlot.Plot = function( inparams = {} )
 
     if ( ! this.params.nozoomdocstring )
         this.docbox.appendChild( document.createTextNode( "  Shift+LMB to zoom" ) );
+
+    if ( this.params.manuallimits ) {
+        hbox = document.createElement( "div" );
+        hbox.setAttribute( "class", "svgplothboxleft" );
+        this.topdiv.appendChild( hbox );
+        hbox.appendChild( document.createTextNode( "x0:" ) );
+        this.x0wid = document.createElement( "input" );
+        hbox.appendChild( this.x0wid );
+        this.x0wid.setAttribute( "size", 8 );
+        this.x0wid.addEventListener( "change", (e) => { self.widgetZoom() } );
+        hbox.appendChild( document.createTextNode( " x1:" ) );
+        this.x1wid = document.createElement( "input" );
+        hbox.appendChild( this.x1wid );
+        this.x1wid.setAttribute( "size", 8 );
+        this.x1wid.addEventListener( "change", (e) => { self.widgetZoom() } );
+        hbox.appendChild( document.createTextNode( " y0:" ) );
+        this.y0wid = document.createElement( "input" );
+        hbox.appendChild( this.y0wid );
+        this.y0wid.setAttribute( "size", 8 );
+        this.y0wid.addEventListener( "change", (e) => { self.widgetZoom() } );
+        hbox.appendChild( document.createTextNode( " y1:" ) );
+        this.y1wid = document.createElement( "input" );
+        hbox.appendChild( this.y1wid );
+        this.y1wid.setAttribute( "size", 8 );
+        this.y1wid.addEventListener( "change", (e) => { self.widgetZoom() } );
+    }
 
     this.clickcallback = function( event ) { self.click( event ); };
     this.downcallback = function( event ) { self.mousedown( event ); };
@@ -530,6 +561,33 @@ SVGPlot.Plot.prototype.zoomTo = function( minx, maxx, miny, maxy ) {
     this._zoommode = "manual";
     this.redraw();
 }
+
+// **********************************************************************
+
+SVGPlot.Plot.prototype.widgetZoom = function() {
+    let didany = false;
+    if ( this.x0wid.value.trim().length > 0 ) {
+        this._minx = parseFloat( this.x0wid.value );
+        didany = true;
+    }
+    if ( this.x1wid.value.trim().length > 0 ) {
+        this._maxx = parseFloat( this.x1wid.value );
+        didany = true;
+    }
+    if ( this.y0wid.value.trim().length > 0 ) {
+        this._miny = parseFloat( this.y0wid.value );
+        didany = true;
+    }
+    if ( this.y1wid.value.trim().length > 0 ) {
+        this._maxy = parseFloat( this.y1wid.value );
+        didany = true;
+    }
+    if ( didany ) {
+        this._zoommode = "manual";
+        this.redraw();
+    }
+}
+
 
 // **********************************************************************
 
@@ -769,6 +827,12 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
             this._miny = autorange.ymin;
             this._maxy = autorange.ymax;
         }
+    }
+    if ( this.params.manuallimits ) {
+        this.x0wid.value = this._minx;
+        this.x1wid.value = this._maxx;
+        this.y0wid.value = this._miny;
+        this.y1wid.value = this._maxy;
     }
 
     var svg = this.svg

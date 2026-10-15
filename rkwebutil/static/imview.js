@@ -210,6 +210,10 @@ class ImView {
         // Implement IRAF zscale algorithm
 
         let samples = this.zsc_sample( nsamples );
+        return zsc_limits( samples, contrast );
+    }
+
+    zsc_limits( samples, contrast ) {
         let npix = samples.length;
         samples.sort();
         let zmin = samples.at( 0 )

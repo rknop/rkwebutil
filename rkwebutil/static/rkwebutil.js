@@ -112,6 +112,11 @@ rkWebUtil.button = function( parent, title, callback )
     return button;
 }
 
+rkWebUtil.text = function( parent, text )
+{
+    return rkWebUtil.elemaker( "text", parent, { "text": text } );
+}
+
 // **********************************************************************
 // items is a list of names; put in "-" for a HR.
 // callbacks is a dict of functions that map names to callback functions.
@@ -148,19 +153,207 @@ rkWebUtil.popupMenu = function( items, callbacks, classes, title=null, titleclas
     return menu;
 }
 
+// **********************************************************************
+
+rkWebUtil.listener = class
+{
+    constructor() {
+        this._listener_callbacks = {};
+        // Did you know... Javascript doesn't have integers.  So ordinal is going to be a double.
+        // That's... ridiculous.  Javascript should be named Ridiculousscript.  Well, we'll never
+        //   have more than 2⁵³-1 listeners, so it's safe, but still, the principle of the thing.
+        //   (I mean, we'll never have more than 2¹⁵-1 listeners, so we should be able to use
+        //   a 16-bit integer here, but oh well.)  (I mean, I guess if I was really good, then
+        //   I'd put in a range checker where ordinal is used, and then all the Rust people will
+        //   tell me that Rust would just have done it, but, the worst that happens is that
+        //   listeners fail to get added because the tag exists and somebody's webap UI breaks.
+        //   It will only happen if somebody deliberately writes Javascript code to overload it,
+        //   because no reasonable use is going to have thousands of listeners added or
+        //   re-added.)
+        this._listener_ordinal = 0;
+    }
+
+    _addsignal( signal, exists_ok=false ) {
+        if ( this._listener_callbacks.hasOwnProperty( signal ) ) {
+            if ( ! exists_ok ) {
+                throw new Error( "Signal " + signal + " already exists." );
+            }
+        } else {
+            this._listener_callbacks[ signal ] = {};
+        }
+    }
+
+    _removesignal( signal, missing_ok=true ) {
+        if ( this._listener_callbacks.hasOwnProperty( signal ) ) {
+            delete this._listener_callbacks[ signal ];
+        }
+        else if ( ! missing_ok ) {
+            throw Error( "Signal " + signal + " doesn't exist." );
+        }
+    }
+
+    listen( signal, callback, tag=null, exists_ok=false )
+    {
+        if ( ! this._listener_callbacks.hasOwnProperty( signal ) ) {
+            throw new Error( "Unknown signal: " + signal );
+        }
+        if ( tag == null ) {
+            tag = '_listener_tag_' + String( this._listener_ordinal );
+            this._listener_ordinal += 1;
+        }
+        if ( this._listener_callbacks[ signal ].hasOwnProperty( tag ) ) {
+            if ( exists_ok ) {
+                console.warn( "Warning: listener already exists for signal " + signal + " tag " + tag +
+                              "; not adding the new callback." );
+            }
+            else {
+                throw new Error( "Listener with tag " + tag + " added to signal " + signal + " more than once." );
+            }
+        }
+        else {
+            this._listener_callbacks[ signal ][ tag ] = callback;
+        }
+        return tag;
+    }
+
+    remove_listener( signal, tag, missing_ok=true )
+    {
+        if ( this._listener_callbacks.hasOwnProperty( signal ) ) {
+            delete this._listener_callbacks[ signal ][ tag ];
+        }
+        else {
+            if ( ! mising_ok ) {
+                throw new Error( "Unknown signal: " + signal );
+            }
+        }
+    }
+
+    emit_signal( signal, info={} ) {
+        if ( ! this._listener_callbacks.hasOwnProperty( signal ) ) {
+            throw new Error( "Unknown signal: " + signal );
+        }
+        for ( let tag in this._listener_callbacks[ signal ] ) {
+            this._listener_callbacks[ signal ][ tag ]( signal, info );
+        }
+    }
+}
+
 
 // **********************************************************************
 
-rkWebUtil.floatToString = function( f, decimals=3 )
+rkWebUtil.EmptiableDiv = class
 {
+    constructor( elemtype="div", parent=null, inprops={} )
+    {
+        var props = { 'body': null,
+                      'text': null,
+                      'empty': false
+                    };
+        Object.assign( props, inprops );
+
+        if ( props.empty ) {
+            this.defaultbody = null;
+        }
+        else {
+            if ( props.body !== null ) {
+                this.defaultbody = props.body;
+            }
+            else {
+                let text = "(Nothing loaded)";
+                if ( props.text !== null ) text = props.text;
+                this.defaultbody = new rkWebUtil.elemaker( "p", null, { "text": text } );
+            }
+        }
+        delete props.empty;
+        delete props.body;
+        delete props.text;
+        this.div = rkWebUtil.elemaker( elemtype, parent, props );
+        props.body = this.defaultbody;
+        this.reset( props );
+    }
+
+    reset( inprops ) {
+        var props = { 'empty': false,
+                      'body': null,
+                      'text': null,
+                      'classes': []
+                    };
+        Object.assign( props, inprops )
+
+        rkWebUtil.wipeDiv( this.div );
+        if ( ! props.empty ) {
+            if ( props.body !== null ) {
+                this.div.appendChild( props.body );
+            }
+            else if ( props.text != null ) {
+                rkWebUtil.elemaker( "p", this.div, { "text": props.text, "classes": props.classes } );
+            }
+            else if ( this.defaultbody !== null ) {
+                this.div.appendChild( this.defaultbody );
+            }
+        }
+    }
+}
+
+
+// **********************************************************************
+
+rkWebUtil.floatToString = function( f, decimals=4, inparams={} )
+{
+    let params = { 'fixedprecision': null,
+                   'expprecision': null,
+                   'nullok': false };
+    Object.assign( params, inparams );
+    let fixedprecision = params['fixedprecision'];
+    let expprecision = params['expprecision'] === null ? decimals : params['expprecision'];
+    let nullok = params['nullok'];
+
+    if ( ( f === null ) || ( f === undefined ) ) {
+        if ( nullok ) {
+            return null;
+        }
+        else {
+            throw new Error( "Can't floatToString a null or undefined value." );
+        }
+    }
     decimals = Math.round( decimals );
-    if ( decimals < 1 ) decimals = 1;
-    if ( decimals > 10 ) decimals = 10;
+
+    // Save us from log errors
+    if ( f == 0 ) return f.toFixed( fixedprecision === null ? 1 : params['fixedprecision'] );
+
     let absf = Math.abs( f );
-    if ( ( absf >= Math.pow(10., decimals+1) ) || ( absf <= Math.pow(10., -decimals-1) ) ) {
-        return f.toExponential( decimals );
-    } else {
-        return f.toFixed( decimals );
+    let forder = Math.log10( Math.abs( absf ) );
+    if ( forder >= 0 ) {
+        if ( Math.ceil( forder ) >= decimals ) {
+            return f.toExponential( expprecision );
+        }
+        else {
+            if ( fixedprecision === null ) {
+                return f.toFixed( decimals - Math.ceil( forder ) );
+            } else {
+                return f.toFixed( fixedprecision );
+            }
+        }
+    }
+    else {
+        if ( fixedprecision === null ) {
+            if ( Math.floor( forder ) <= decimals ) {
+                return f.toExponential( expprecision )
+            }
+            else {
+                // ...do I want forder-1 here?
+                return f.toFixed( decimals + Math.floor( forder ) );
+            }
+        }
+        else {
+            if ( Math.floor( forder ) <= -fixedprecision ) {
+                return f.toExponential( expprecision );
+            }
+            else {
+                // ...again, do I want forder-1?
+                return f.toFixed( fixedprecision - Math.floor( forder ) );
+            }
+        }
     }
 }
 
@@ -714,15 +907,15 @@ rkWebUtil.SortableTable = class
         Object.assign( props, inprops )
 
         if ( data == null ) {
-            alert( "data cannot be null" );
+            alert( "SortableTable: data cannot be null" );
             return
         }
         if ( fields == null ) {
-            alert( "fields cannot be null" );
+            alert( "SortableTable: fields cannot be null" );
             return
         }
         if ( rowrenderer == null ) {
-            alert( "rowrenderer cannot be null" );
+            alert( "SortableTable: rowrenderer cannot be null" );
             return;
         }
 
@@ -1077,14 +1270,46 @@ rkWebUtil.Connector = class
                 appcommand = appcommand.substring( 1 );
             req.open( "POST", this.app + appcommand );
             req.onload = (e) => {
+                let contype = req.getResponseHeader( "Content-Type" );
+                if ( req.status != 200 ) {
+                    let rval = { "error": "Bad return status",
+                                 "url": appcommand,
+                                 "status": req.status }
+                    if ( ( req.responseType == "text" ) || ( req.responseType == "" ) ) {
+                        rval["text"] = req.responseText;
+                        if ( req.responseText.length < 256 ) {
+                            window.alert( "Got error return status " + req.status + ": " + req.responseText );
+                        } else {
+                            window.alert( "Got error return status " + req.status );
+                        }
+                    }
+                    reject( rval  );
+                    return;
+                }
                 if ( retjson ) {
+                    if ( contype.substring( 0, 16 ) != "application/json" ) {
+                        window.alert( "Error, got back " + contype + ", expected application/json" );
+                        let rval= { "error": "Not json",
+                                    "url": appcommand,
+                                    "Content-Type": contype
+                                  }
+                        if ( ( req.responseType == "text" ) || ( req.responseType == "" ) ) {
+                            rval["text"] = req.responseText;
+                        }
+                        reject( rval );
+                        return;
+                    }
                     try {
                         var statedata = JSON.parse( req.responseText );
                     } catch ( err ) {
                         window.alert( "Error parsing JSON! (" + err + ")" );
                         console.trace();
                         console.log( req.responseText );
-                        reject( { "error": "Error parsing JSON! (" + err + ")" } );
+                        reject( { "error": "Error parsing JSON! (" + err + ")",
+                                  "url": appcommand,
+                                  "text": req.responseText
+                                } );
+                        return;
                     }
                     if ( statedata.hasOwnProperty( "error" ) ) {
                         reject( statedata );
@@ -1096,7 +1321,10 @@ rkWebUtil.Connector = class
                 };
             };
             req.onerror = (e) => {
-                reject( { "error": "HTTP status: " + req.status } );
+                reject( { "error": "HTTP status: " + req.status,
+                          "url": appcommand,
+                          "status": req.status
+                        } );
             };
             if ( ! retjson ) req.responseType = 'arraybuffer';
             if ( json != null ) {
@@ -1150,9 +1378,9 @@ rkWebUtil.Tabbed = function( parentdiv, params ) {
     this.hbox = 'hbox';
     this.tabselcss = 'tabsel';
     this.tabunselcss = 'tabunsel';
-    this.tabdivcss = 'tabdiv';
-    this.tabcontentdivcss = 'tabcontentdiv';
-    this.buttonboxdivcss = 'buttonboxdiv';
+    this.tabdivcss = [ 'tabdiv' ];
+    this.tabcontentdivcss = [ 'tabcontentdiv' ];
+    this.buttonboxdivcss = [ 'buttonboxdiv' ];
     this.buttonelem = 'h3';
     Object.assign( this, params );
 
@@ -1163,9 +1391,9 @@ rkWebUtil.Tabbed = function( parentdiv, params ) {
     this.focuscallbacks = {};
     this.blurcallbacks = {};
 
-    this.div = rkWebUtil.elemaker( "div", parentdiv, { "classes": [ this.tabdivcss ] } );
-    this.buttonbox = rkWebUtil.elemaker( "div", this.div, { "classes": [ this.buttonboxdivcss ] } );
-    this.tabcontentdiv = rkWebUtil.elemaker( "div", this.div, { "classes": [ this.tabcontentdivcss ] } );
+    this.div = rkWebUtil.elemaker( "div", parentdiv, { "classes": this.tabdivcss } );
+    this.buttonbox = rkWebUtil.elemaker( "div", this.div, { "classes": this.buttonboxdivcss } );
+    this.tabcontentdiv = rkWebUtil.elemaker( "div", this.div, { "classes": this.tabcontentdivcss } );
 }
 
 rkWebUtil.Tabbed.prototype.addTab = function( tab, buttontext, div, sel=false,
@@ -1210,6 +1438,35 @@ rkWebUtil.Tabbed.prototype.selectTab = function( tab )
     if ( this.focuscallbacks[tab] != null )
         this.focuscallbacks[tab]();
 }
+
+rkWebUtil.Tabbed.prototype.hideTabs = function( tabs )
+{
+    if ( ! Array.isArray(tabs) ) tabs = [ tabs ];
+    for ( let tab of tabs ) {
+        if ( this.buttons.hasOwnProperty (tab ) ) {
+            this.buttons[tab].style.display = "none";
+        }
+    }
+}
+
+rkWebUtil.Tabbed.prototype.showTabs = function( tab=null )
+{
+    if ( tab === null ) {
+        for ( let tab in this.buttons ) {
+            // I think inline-block is the default for buttons...
+            this.buttons[tab].style.display = "inline-block";
+        }
+    }
+    else {
+        if ( ! Array.isArray(tabs) ) tabs = [ tabs ];
+        for ( let tab of tabs ) {
+            if ( this.buttons.hasOwnProperty( tab ) ) {
+                this.buttons[tab].style.display = "inline-block";
+            }
+        }
+    }
+}
+
 
 // **********************************************************************
 

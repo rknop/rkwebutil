@@ -117,7 +117,7 @@ rkAuth.prototype.processCheckAuth = function( statedata, isauthcallback, isnotau
 rkAuth.prototype.logout = function( loggedoutcallback=null ) {
     var self=this;
     rkWebUtil.wipeDiv( this.authdiv );
-    rkWebUtil.elemaker( "p", this.authdiv, { "text": "...logging out..." } )
+    rkWebUtil.elemaker( "text", this.authdiv, { "text": "...logging out..." } )
     this.conn.sendHttpRequest( "auth/logout", null,
                                function() { self.loggedout( loggedoutcallback ), self.errorhandler } );
 }
@@ -133,7 +133,7 @@ rkAuth.prototype.loggedout = function( loggedoutcallback ) {
         loggedoutcallback()
     } else {
         rkWebUtil.wipeDiv( this.authdiv );
-        rkWebUtil.elemaker( "p", this.authdiv, { "text": "Logged out." } );
+        rkWebUtil.elemaker( "text", this.authdiv, { "text": "Logged out." } );
     }
 }
 
