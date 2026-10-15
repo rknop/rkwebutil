@@ -102,11 +102,23 @@ rkWebUtil.elemaker = function( elemtype, parent, inprops )
 
 // **********************************************************************
 
-rkWebUtil.button = function( parent, title, callback )
+rkWebUtil.button = function( parent, title, callback, classes=null, attributes=null )
 {
     var button = document.createElement( "input" );
     button.setAttribute( "type", "button" );
     button.setAttribute( "value", title );
+    if ( attributes != null ) {
+        for ( let attr in attributes ) {
+            if ( attributes.hasOwnProperty( attr ) ) {
+                button.setAttribute( attr, attributes[attr] );
+            }
+        }
+    }
+    if ( classes != null ) {
+        for ( let classname of classes ) {
+            elem.classList.add( classname );
+        }
+    }
     button.addEventListener( "click", callback );
     if ( parent != null ) parent.appendChild( button );
     return button;
@@ -356,6 +368,30 @@ rkWebUtil.floatToString = function( f, decimals=4, inparams={} )
         }
     }
 }
+
+
+// **********************************************************************
+// Useful for validating number inputs
+
+rkWebUtil.parseIntInRange = function( val, min=null, max=null, def=null )
+{
+    if ( ( min != null ) && ( max != null ) && ( min > max ) ) {
+        throw "min (" + min + ") > max (" + max + ")";
+    }
+    let parsed = parseInt( val );
+    if ( isNaN(parsed) ) {
+        if ( def != null ) {
+            return def;
+        }
+        throw "Can't parse " + val + " to an integer.";
+    }
+    else {
+        if ( ( min != null ) && ( parsed < min ) ) parsed = min;
+        if ( ( max != null ) && ( parsed > max ) ) parsed = max;
+    }
+    return parsed;
+}
+
 
 
 // **********************************************************************
@@ -1094,9 +1130,10 @@ rkWebUtil.SortableTable = class
 
 rkWebUtil.Connector = class
 {
-    constructor( app )
+    constructor( app, customreqheaders=null )
     {
         this.app = app;
+        this.customreqheaders = customreqheaders;
     }
 
     // **********************************************************************
@@ -1176,6 +1213,11 @@ rkWebUtil.Connector = class
         req.onreadystatechange = function() { self.catchHttpResponse( req, handler, errorhandler=errorhandler,
                                                                       finalcall=finalcall ) };
         req.setRequestHeader( "Content-Type", "application/json" );
+        if ( this.customreqheaders != null ) {
+            for ( let key in this.customreqheaders ) {
+                req.setRequestHeader( key, this.customreqheaders[key] );
+            }
+        }
         req.send( JSON.stringify( data ) );
     }
 
@@ -1357,6 +1399,77 @@ rkWebUtil.stripparagraphtags = function(text)
     newtext = newtext.replace(veryendpar, "");
 
     return newtext;
+}
+
+
+// **********************************************************************
+// Some basic HTML fixers
+
+rkWebUtil.escapeHTML = function(text)
+{
+    var amp = /&/g;
+    var lt = /</g;
+    var gt = />/g;
+    var qt = /'/g;
+    var dblqt = /"/g;
+
+    return ( text
+             .replace( amp, "&amp;" )
+             .replace( lt, "&lt;" )
+             .replace( gt, "&gt;" )
+             .replace( qt, "&quot;" )
+             .replace( dblqt, "&#039;" )
+           )
+}
+
+// **********************************************************************
+// Formatting numbers that might be null, getting "" for null
+
+rkWebUtil.fixedOrEmpty = function( val, digits=4 )
+{
+    if ( val === null ) {
+        return "";
+    } else {
+        return val.toFixed( digits );
+    }
+}
+
+
+rkWebUtil.exponentialOrEmpty = function( val, digits=4 )
+{
+    if ( val === null ) {
+        return "";
+    } else {
+        return val.toExponential( digits );
+    }
+}
+
+
+// **********************************************************************
+// Format integer with commas
+
+rkWebUtil.commafyInt = function( val )
+{
+    val = parseInt( val ).toString();
+    let lastdex = val.length;
+    let dex = val.length - 3;
+    let retval = null;
+    while ( dex > 0 ) {
+        if ( val[dex] == '-' ) break;
+        if ( retval === null ) {
+            retval = val.substring( dex, lastdex );
+        } else {
+            retval = val.substring( dex, lastdex ) + "," + retval;
+        }
+        lastdex = dex;
+        dex -= 3;
+    }
+    if ( retval === null ) {
+        retval = val;
+    } else {
+        retval = val.substring( dex, lastdex ) + "," + retval;
+    }
+    return retval;
 }
 
 // **********************************************************************
