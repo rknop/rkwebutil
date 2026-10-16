@@ -161,7 +161,7 @@ rkAuth.prototype.showLoginUI = function() {
                                                                 "size": 20,
                                                                 "id": "login_password" } } );
     tr = rkWebUtil.elemaker( "tr", table );
-    td = rkWebUtil.elemaker( "td", tr, { "colspan": 2 } );
+    td = rkWebUtil.elemaker( "td", tr, { "attributes": { "colspan": 2 } } );
     button = rkWebUtil.elemaker( "button", td, { "text": "Log In",
                                                  "click": function() { self.startLogin() } } );
 

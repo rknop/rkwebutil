@@ -22,7 +22,7 @@ rkWebUtil.wipeDiv = function( div )
 
 // **********************************************************************
 
-rkWebUtil.elemaker = function( elemtype, parent, inprops )
+rkWebUtil.elemaker = function( elemtype, parent, inprops={} )
 {
     var props = { id: null,
                   text: null,
@@ -310,12 +310,14 @@ rkWebUtil.EmptiableDiv = class
 
 // **********************************************************************
 
-rkWebUtil.floatToString = function( f, decimals=4, inparams={} )
+rkWebUtil.floatToString = function( f, inparams={} )
 {
-    let params = { 'fixedprecision': null,
+    let params = { 'digits': 4,
+                   'fixedprecision': null,
                    'expprecision': null,
                    'nullok': false };
     Object.assign( params, inparams );
+    let decimals = params['digits'];
     let fixedprecision = params['fixedprecision'];
     let expprecision = params['expprecision'] === null ? decimals : params['expprecision'];
     let nullok = params['nullok'];

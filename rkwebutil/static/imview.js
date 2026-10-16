@@ -9,6 +9,221 @@ class ImView {
 
     // scale is in display pixels per data pixel
 
+    // constructor two arguments; the first is a params, dictionary the second is a bool norender
+    //
+    // Allowed parameters and their defaults;
+    // "data": null,
+    // "width": null,
+    // "height": null,
+    // "dispwidth": 600,
+    // "dispheight": 600,
+    // "x0": null,
+    // "y0": null,
+    // "scale": null,
+    // "parent": null,
+    // "min": null,
+    // "max": null,
+    // "zscale_samples": 10000,
+    // "zscale_contrast": 0.25,
+    // "name": null,
+    // "clickcallback": null
+
+    // Static methods for dealing with float/byte data and for zscaling
+
+    static float_to_byte( f, min, max, nanvalue=0 )
+    {
+        if ( isNaN(f) ) return nanvalue;
+        else if ( f <= min ) return 0;
+        else if ( f >= max ) return 255;
+        else return Math.round( ( f - min ) * 255 / ( max - min ) );
+    }
+
+    static is_little_endian() {
+        let buffer = new ArrayBuffer(2);
+        let dv = new DataView( buffer );
+        dv.setInt16( 0, 256, true );
+        let iarr = new Int16Array( buffer );
+        return iarr[0] === 256;
+    }
+
+    static MAX_REJECT = 0.5;
+    static MIN_NPIXELS = 5;
+    static GOOD_PIXEL = 0;
+    static BAD_PIXEL = 1;
+    static KREJ = 2.5;
+    static MAX_ITERATIONS = 5;
+
+    // zscale functions (here and below) were stolen from
+    //   https://github.com/spacetelescope/stsci.numdisplay/blob/master/lib/stsci/numdisplay/zscale.py
+    // and converted to Javascript.  That git archive has a BSD-like licence with:
+    //   Copyright (C) 2005 Association of Universities for Research in Astronomy (AURA)
+
+    static zsc_limits( samples, contrast, nukesamples=false ) {
+        if ( ! nukesamples ) {
+            let newsamples;
+            if ( samples instanceof Float32Array ) {
+                newsamples = new Float32Array( samples.length );
+            }
+            else if ( samples instanceof Float64Array ) {
+                newsamples = new Float64Array( samples.length );
+            }
+            else {
+                window.alert( "imview zscale failed, doesn't know how to handle the samples you gave me" );
+                throw new Error( "invalid type for samples" );
+            }
+            newsamples.set( samples );
+            samples = newsamples;
+        }
+        let npix = samples.length;
+        samples.sort();
+        let zmin = samples.at( 0 )
+        let zmax = samples.at( samples.length - 1 );
+        let center_pixel = Math.floor( ( npix - 1 ) / 2 );
+        let median = samples.at( center_pixel );
+        if ( npix % 2 == 0 )
+            median = 0.5 * ( median + samples.at(center_pixel + 1) );
+        let minpix = Math.max( ImView.MIN_NPIXELS, Math.floor( npix * ImView.MAX_REJECT ) );
+        let ngrow = Math.max( 1, Math.floor( npix * 0.01 ) );
+        let tmp = ImView.zsc_fit_line( samples, npix, ImView.KREJ, ngrow, ImView.MAX_ITERATIONS );
+        let ngoodpix = tmp.ngoodpix;
+        let zstart = tmp.zstart;
+        let zslope = tmp.zslope;
+
+        let z1 = zmin;
+        let z2 = zmax;
+        if ( ngoodpix >= minpix ) {
+            if ( contrast > 0 ) zslope = zslope / contrast;
+            z1 = Math.max( zmin, median - (center_pixel - 1) * zslope );
+            z2 = Math.min( zmax, median + (npix - center_pixel) * zslope );
+        }
+        return [ z1, z2 ];
+    }
+
+    static zsc_fit_line( samples, npix, krej, ngrow, maxiter ) {
+        let intercept, slope;
+
+        // First re-map indices from -1.0 to 1.0
+        let xscale = 2.0 / ( npix - 1 );
+        let xnorm = new Float32Array( samples.length );
+        for ( let i=0 ; i < samples.length ; i+=1 ) xnorm.set( [ i * xscale - 1.0 ], i );
+
+        let minpix = Math.max( ImView.MIN_NPIXELS, Math.floor( npix * ImView.MAX_REJECT ) );
+        let ngoodpix = npix;
+        let last_ngoodpix = npix + 1;
+
+        // This is the mask used in k-sigma clipping.  0 (ImView.GOOD_PIXEL) is good, 1 (ImView.BAD_PIXEL) is bad
+        let badpix = new Int16Array( samples.length );
+        badpix.fill( ImView.GOOD_PIXEL )
+
+        for ( let n=0 ; n < maxiter ; n+=1 ) {
+            if ( (ngoodpix >= last_ngoodpix) || (ngoodpix < minpix) )
+                break;
+            last_ngoodpix = ngoodpix;
+
+            // Accumulate sums to calculate straight line fit
+            let sumx = 0.;
+            let sumxx = 0.;
+            let sumxy = 0.;
+            let sumy = 0.;
+            let sum = 0.;
+            for ( let i=0 ; i<xnorm.length ; i+=1 ) {
+                if ( badpix.at(i) == ImView.GOOD_PIXEL ) {
+                    sumx += xnorm.at(i);
+                    sumxx += xnorm.at(i) ** 2;
+                    sumxy += xnorm.at(i) * samples.at(i);
+                    sumy += samples.at(i);
+                    sum += 1;
+                }
+            }
+
+            let delta = sum * sumxx - sumx * sumx;
+            // Slope and intercept
+            intercept = (sumxx * sumy - sumx * sumxy) / delta;
+            slope = (sum * sumxy - sumx * sumy) / delta;
+
+            // Subtract fitted line from the data array
+            let flat = new Float32Array( xnorm.length );
+            for ( let i=0 ; i < samples.length ; i+=1 )
+                flat.set( [ samples.at(i) - ( xnorm.at(i) * slope + intercept ) ], i )
+
+            // Compute the k-sigma rejection threshold
+            let tmp = ImView.zsc_compute_sigma( flat, badpix, npix );
+            let threshold = tmp.sigma * krej;
+
+            // Detect and reject pixels further than k*sigma from the fitted line
+            for ( let i=0 ; i<flat.length ; i+=1 )
+                if ( ( flat.at(i) < -threshold ) || ( flat.at(i) > threshold ) )
+                    badpix.set( [ ImView.BAD_PIXEL ], i );
+
+            // Convolve with a kernel of length ngrow
+            let newbadpix = new Int16Array( badpix.length );
+            newbadpix.fill( ImView.GOOD_PIXEL );
+            ngoodpix = 0;
+            for ( let i = 0 ; i < badpix.length ; i += 1 ) {
+                let j0 = Math.max( 0, i - ngrow );
+                let j1 = Math.min( badpix.length, i + ngrow );
+                let isbad = false;
+                for ( let j = j0; j < j1 ; j += 1 ) {
+                    if ( badpix.at(j) == ImView.BAD_PIXEL ) {
+                        isbad = true;
+                        break;
+                    }
+                }
+                if ( isbad )
+                    newbadpix.set( [ ImView.BAD_PIXEL ], i );
+                else
+                    ngoodpix += 1;
+            }
+            badpix = newbadpix;
+        }
+
+        return { 'ngoodpix': ngoodpix,
+                 'zstart': intercept - slope,
+                 'zslope': slope * xscale };
+    }
+
+    static zsc_compute_sigma( flat, badpix, npix ) {
+        let mean, sigma;
+
+        // Compute the rms deviation from the mean of a flattened array.
+        // Ignore rejected pixels
+
+        let sumz = 0.;
+        let sumsq = 0.;
+        let n = 0;
+        for ( let i=0 ; i<flat.length; i+=1 ) {
+            if ( badpix.at(i) == ImView.GOOD_PIXEL ) {
+                sumz += flat.at(i);
+                sumsq += flat.at(i) ** 2;
+                n += 1;
+            }
+        }
+
+        if ( n == 0 ) {
+            mean = null;
+            sigma = null;
+        }
+        else if ( n == 1 ) {
+            mean = sumz;
+            sigma = null;
+        }
+        else {
+            mean = sumz / n;
+            sigma = sumsq / ( n - 1 ) - sumz * sumz / ( n * (n-1) );
+            if ( sigma < 0. )
+                sigma = 0.;
+            else
+                sigma = Math.sqrt( sigma );
+        }
+
+        return { 'ngoodpix': n,
+                 'mean': mean,
+                 'sigma': sigma };
+    }
+
+
+    // Global variables for tracking internal default names to avoid document id duplication
+
     static numImViews = 0;
     static numSquares;
 
@@ -38,12 +253,8 @@ class ImView {
             window.alert( "ERROR: Unknown parameters passed to ImView: " + unknown.toString() );
             return;
         }
-        for ( let param in defaults ) {
-            if ( inparams.hasOwnProperty(param) )
-                this[param] = inparams[param];
-            else
-                this[param] = defaults[param];
-        }
+        Object.assign( this, defaults );
+        Object.assign( this, inparams );
 
         if ( this.name == null ) {
             this.name = "imview-" + ImView.numImViews.toString();
@@ -56,18 +267,21 @@ class ImView {
         }
 
         this.ndata = this.width * this.height;
-        this.zscale_samples = Math.min( this.zscale_samples, this.ndata );
 
-        if ( ! ( this.data instanceof DataView ) ) {
-            window.alert( "ImView: data must be a DataView" );
-            return;
+        if ( ( this.data instanceof Float32Array ) || ( this.data instanceof Float64Array ) )
+        {
+            if ( this.data.length != this.ndata ) {
+                window.alert( "Imview: data length " + this.data.length.toString() +
+                              " doesn't match width × height = " + this.width.toString() +
+                              " × " + this.height.toString() + " = " + this.ndata.toString() );
+                return;
+            }
         }
-        if ( this.data.byteLength != ( this.ndata * 4 ) ) {
-            window.alert( "Imview: data array length " + this.data.byteLength.toString() +
-                          " doesn't match width × height × 4 = " + this.width.toString() +
-                          " × " + this.height.toString() + " × 4" );
-            return;
+        else {
+            window.alert( "ImView: data must be a Float32Array or Float64Array" );
         }
+
+        this.zscale_samples = Math.min( this.zscale_samples, this.ndata );
 
         let tmp = this.zscale( this.zscale_samples, this.zscale_contrast );
         this.zmin = tmp[0];
@@ -159,13 +373,17 @@ class ImView {
         let buttondiv = rkWebUtil.elemaker( "div", vbox, { "classes": [ 'hbox', 'justifycenter' ] } );
         rkWebUtil.elemaker( "span", buttondiv, { "text": "min:", "classes": [ 'bold' ] } );
         this.minwidget = rkWebUtil.elemaker( "input", buttondiv,
-                                             { "attributes": { "value": rkWebUtil.floatToString( this.min ),
+                                             { "attributes": { "value": rkWebUtil.floatToString( this.min,
+                                                                                                 { "nullok": true }
+                                                                                               ),
                                                                "size": 10 },
                                                "change": function() { self.set_stretch_and_render(); },
                                                "classes": [ 'outsetborder' ] } );
         rkWebUtil.elemaker( "span", buttondiv, { "text": "  max:", "classes": [ 'bold' ] } );
         this.maxwidget = rkWebUtil.elemaker( "input", buttondiv,
-                                             { "attributes": { "value": rkWebUtil.floatToString( this.max ),
+                                             { "attributes": { "value": rkWebUtil.floatToString( this.max,
+                                                                                                 { "nullok": true }
+                                                                                               ),
                                                                "size": 10 },
                                                "change": function() { self.set_stretch_and_render(); },
                                                "classes": [ 'outsetborder' ] } );
@@ -194,49 +412,11 @@ class ImView {
     }
 
 
-    // The next three functions where stolen from
-    //   https://github.com/spacetelescope/stsci.numdisplay/blob/master/lib/stsci/numdisplay/zscale.py
-    // and converted to Javascript.  That GIT Archive has a BSD like licence with:
-    //   Copyright (C) 2005 Association of Universities for Research in Astronomy (AURA)
-
-    static MAX_REJECT = 0.5;
-    static MIN_NPIXELS = 5;
-    static GOOD_PIXEL = 0;
-    static BAD_PIXEL = 1;
-    static KREJ = 2.5;
-    static MAX_ITERATIONS = 5;
-
     zscale( nsamples=1000, contrast=0.25 ) {
         // Implement IRAF zscale algorithm
 
         let samples = this.zsc_sample( nsamples );
-        return zsc_limits( samples, contrast );
-    }
-
-    zsc_limits( samples, contrast ) {
-        let npix = samples.length;
-        samples.sort();
-        let zmin = samples.at( 0 )
-        let zmax = samples.at( samples.length - 1 );
-        let center_pixel = Math.floor( ( npix - 1 ) / 2 );
-        let median = samples.at( center_pixel );
-        if ( npix % 2 == 0 )
-            median = 0.5 * ( median + samples.at(center_pixel + 1) );
-        let minpix = Math.max( ImView.MIN_NPIXELS, Math.floor( npix * ImView.MAX_REJECT ) );
-        let ngrow = Math.max( 1, Math.floor( npix * 0.01 ) );
-        let tmp = this.zsc_fit_line( samples, npix, ImView.KREJ, ngrow, ImView.MAX_ITERATIONS );
-        let ngoodpix = tmp.ngoodpix;
-        let zstart = tmp.zstart;
-        let zslope = tmp.zslope;
-
-        let z1 = zmin;
-        let z2 = zmax;
-        if ( ngoodpix >= minpix ) {
-            if ( contrast > 0 ) zslope = zslope / contrast;
-            z1 = Math.max( zmin, median - (center_pixel - 1) * zslope );
-            z2 = Math.min( zmax, median + (npix - center_pixel) * zslope );
-        }
-        return [ z1, z2 ];
+        return ImView.zsc_limits( samples, contrast, true );
     }
 
     zsc_sample( maxpix ) {
@@ -264,7 +444,7 @@ class ImView {
             let x = x0;
             let dx = stride;
             while ( ( x >= 0 ) && ( x <= this.width ) ) {
-                let val = this.data.getFloat32( 4 * (off + x), true );
+                let val = this.data[ off + x ];
                 if ( ! isNaN(val) ) samples.push( val );
                 if ( samples.length >= maxpix )
                     break;
@@ -283,130 +463,6 @@ class ImView {
 
         return new Float32Array( samples );
     }
-
-    zsc_fit_line( samples, npix, krej, ngrow, maxiter ) {
-        let intercept, slope;
-
-        // First re-map indices from -1.0 to 1.0
-        let xscale = 2.0 / ( npix - 1 );
-        let xnorm = new Float32Array( samples.length );
-        for ( let i=0 ; i < samples.length ; i+=1 ) xnorm.set( [ i * xscale - 1.0 ], i );
-
-        let minpix = Math.max( ImView.MIN_NPIXELS, Math.floor( npix * ImView.MAX_REJECT ) );
-        let ngoodpix = npix;
-        let last_ngoodpix = npix + 1;
-
-        // This is the mask used in k-sigma clipping.  0 (ImView.GOOD_PIXEL) is good, 1 (ImView.BAD_PIXEL) is bad
-        let badpix = new Int16Array( samples.length );
-        badpix.fill( ImView.GOOD_PIXEL )
-
-        for ( let n=0 ; n < maxiter ; n+=1 ) {
-            if ( (ngoodpix >= last_ngoodpix) || (ngoodpix < minpix) )
-                break;
-            last_ngoodpix = ngoodpix;
-
-            // Accumulate sums to calculate straight line fit
-            let sumx = 0.;
-            let sumxx = 0.;
-            let sumxy = 0.;
-            let sumy = 0.;
-            let sum = 0.;
-            for ( let i=0 ; i<xnorm.length ; i+=1 ) {
-                if ( badpix.at(i) == ImView.GOOD_PIXEL ) {
-                    sumx += xnorm.at(i);
-                    sumxx += xnorm.at(i) ** 2;
-                    sumxy += xnorm.at(i) * samples.at(i);
-                    sumy += samples.at(i);
-                    sum += 1;
-                }
-            }
-
-            let delta = sum * sumxx - sumx * sumx;
-            // Slope and intercept
-            intercept = (sumxx * sumy - sumx * sumxy) / delta;
-            slope = (sum * sumxy - sumx * sumy) / delta;
-
-            // Subtract fitted line from the data array
-            let flat = new Float32Array( xnorm.length );
-            for ( let i=0 ; i < samples.length ; i+=1 )
-                flat.set( [ samples.at(i) - ( xnorm.at(i) * slope + intercept ) ], i )
-
-            // Compute the k-sigma rejection threshold
-            let tmp = this.zsc_compute_sigma( flat, badpix, npix );
-            let threshold = tmp.sigma * krej;
-
-            // Detect and reject pixels further than k*sigma from the fitted line
-            for ( let i=0 ; i<flat.length ; i+=1 )
-                if ( ( flat.at(i) < -threshold ) || ( flat.at(i) > threshold ) )
-                    badpix.set( [ ImView.BAD_PIXEL ], i );
-
-            // Convolve with a kernel of length ngrow
-            let newbadpix = new Int16Array( badpix.length );
-            newbadpix.fill( ImView.GOOD_PIXEL );
-            ngoodpix = 0;
-            for ( let i = 0 ; i < badpix.length ; i += 1 ) {
-                let j0 = Math.max( 0, i - ngrow );
-                let j1 = Math.min( badpix.length, i + ngrow );
-                let isbad = false;
-                for ( let j = j0; j < j1 ; j += 1 ) {
-                    if ( badpix.at(j) == ImView.BAD_PIXEL ) {
-                        isbad = true;
-                        break;
-                    }
-                }
-                if ( isbad )
-                    newbadpix.set( [ ImView.BAD_PIXEL ], i );
-                else
-                    ngoodpix += 1;
-            }
-            badpix = newbadpix;
-        }
-
-        return { 'ngoodpix': ngoodpix,
-                 'zstart': intercept - slope,
-                 'zslope': slope * xscale };
-    }
-
-
-    zsc_compute_sigma( flat, badpix, npix ) {
-        let mean, sigma;
-
-        // Compute the rms deviation from the mean of a flattened array.
-        // Ignore rejected pixels
-
-        let sumz = 0.;
-        let sumsq = 0.;
-        let n = 0;
-        for ( let i=0 ; i<flat.length; i+=1 ) {
-            if ( badpix.at(i) == ImView.GOOD_PIXEL ) {
-                sumz += flat.at(i);
-                sumsq += flat.at(i) ** 2;
-                n += 1;
-            }
-        }
-
-        if ( n == 0 ) {
-            mean = null;
-            sigma = null;
-        }
-        else if ( n == 1 ) {
-            mean = sumz;
-            sigma = null;
-        }
-        else {
-            mean = sumz / n;
-            sigma = sumsq / ( n - 1 ) - sumz * sumz / ( n * (n-1) );
-            if ( sigma < 0. )
-                sigma = 0.;
-            else
-                sigma = Math.sqrt( sigma );
-        }
-
-        return { 'ngoodpix': n,
-                 'mean': mean,
-                 'sigma': sigma };
-    }
-
 
     change_stretch( min, max ) {
         this.min = min;
@@ -483,6 +539,8 @@ class ImView {
         let imagedata = this.ctx.createImageData( this.dispwidth, this.dispheight );
 
         // Does javascript have vectorized stuff to make this faster?
+        // Note : remember that astronomical images have (0, 0) at the lower-left,
+        //   but browsers think (0, 0) is the upper-left.
         for( let dispy = 0 ; dispy < this.dispheight ; ++dispy ) {
             let off = dispy * this.dispwidth * 4;
             let imgy = Math.round( ( this.dispheight - dispy ) / this.scale + this.y0 );
@@ -501,28 +559,11 @@ class ImView {
                 }
                 else {
                     if ( imgx != lastimgx ) {
-                        // Man I hope function calling overhead doesn't kill us here.
-                        // With any luck, DataView.getFloat32 is implemented as an inline thing
-                        let val = this.data.getFloat32( 4 * ( imgy * this.width + imgx ), true );
-                        bval = 0;
-                        if ( val > this.min ) {
-                            if ( val >= this.max ) {
-                                bval = 255;
-                            } else {
-                                bval = ( val - this.min ) * 255 / ( this.max - this.min );
-                            }
-                        }
-                        if ( isNaN(bval) ) {
-                            bval = 0;
-                        } else {
-                            // I feel very queasy about javascript not having an expicit uint8 type
-                            bval = Math.round( bval );
-                            if ( bval < 0 ) bval = 0;
-                            if ( bval > 255 ) bval = 255;
-                        }
+                        let val = this.data[ imgy * this.width + imgx ];
+                        bval = ImView.float_to_byte( val, this.min, this.max, 0 );
                     }
                 }
-                imagedata.data[ off ] = bval;
+                imagedata.data[ off     ] = bval;
                 imagedata.data[ off + 1 ] = bval;
                 imagedata.data[ off + 2 ] = bval;
                 imagedata.data[ off + 3 ] = 255;
@@ -679,9 +720,8 @@ class ImView {
                 this.valwidget.value = "";
             }
             else {
-                this.valwidget.value = rkWebUtil.floatToString(
-                    this.data.getFloat32( 4 * ( iimgy * this.width + iimgx ), true ),
-                    4 );
+                this.valwidget.value = rkWebUtil.floatToString( this.data[ iimgy * this.width + iimgx ],
+                                                                { "nullok": true } );
             }
 
             // If shift-click, or if middle-click, then recenter

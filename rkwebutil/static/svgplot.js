@@ -1489,6 +1489,9 @@ SVGPlot.Plot.prototype.click = function( event )
         listener( { "setdex": minsetdex,
                     "pointdex": minpointdex,
                     "dataset": this.datasets[minsetdex],
+                    "pointname": this.datasets[minsetdex]._pointnames[minpointdex],
+                    "pointdata": ( ( this.datasets[minsetdex]._pointdata !== null )
+                                   ? this.datasets[minsetdex]._pointdata[minpointdex] : null ),
                     "x": closex,
                     "y": closey } );
     }
@@ -1696,6 +1699,7 @@ SVGPlot.Dataset = function( inparams = {} )
                    "dx": [],
                    "dy": [],
                    "pointnames": null,
+                   "pointdata": null,
                    "linewid": 4,
                    "errbarwid": 2,
                    "color": "#cc0000",
@@ -1731,7 +1735,7 @@ SVGPlot.Dataset = function( inparams = {} )
         window.alert( "Plot creation error." );
         return;
     }
-    this.replaceData( params.x, params.y, params.dx, params.dy, params.pointnames );
+    this.replaceData( params.x, params.y, params.dx, params.dy, params.pointnames, params.pointdata );
 
     this.markercolor = params.markercolor;
     this.marker = SVGPlot.Dataset.markerCode( params.marker, params.markercolor,
@@ -1746,7 +1750,7 @@ SVGPlot.Dataset = function( inparams = {} )
 
 // **********************************************************************
 
-SVGPlot.Dataset.prototype.replaceData = function( x, y, dx=[], dy=[], pointnames=null ) {
+SVGPlot.Dataset.prototype.replaceData = function( x, y, dx=[], dy=[], pointnames=null, pointdata=null ) {
     this._x = [...x];
     this._y = [...y];
     this._dx = [...dx];
@@ -1765,6 +1769,12 @@ SVGPlot.Dataset.prototype.replaceData = function( x, y, dx=[], dy=[], pointnames
         }
         this._pointnames = [...pointnames];
     }
+    if ( ( pointdata !== null ) && ( pointdata.length != x.length ) ) {
+        console.log( "ERROR: pointdata is wrong length.  There will be further errors" );
+        window.alert( "Plot creation error." );
+        return;
+    }
+    this._pointdata = pointdata;
 }
 
 // **********************************************************************
@@ -1880,7 +1890,7 @@ SVGPlot.Dataset.prototype.highlightSquare = function( svgx, svgy ) {
 
 // **********************************************************************
 
-SVGPlot.Dataset.prototype.addPoint = function( x, y, dx=null, dy=null, name=null )
+SVGPlot.Dataset.prototype.addPoint = function( x, y, dx=null, dy=null, name=null, data=null )
 {
     if ( this._x.length == this._dx.length ) {
         if ( dx == null ) this._dx.push( 0. );
@@ -1908,6 +1918,7 @@ SVGPlot.Dataset.prototype.addPoint = function( x, y, dx=null, dy=null, name=null
         this._pointnames.push( "Point " + this.ordinal)
     else
         this._pointnames.push( name );
+    if ( this._pointdata !== null ) this._pointdata.push( data );
     this.ordinal += 1;
     if ( this.plot != null && this.plot._redrawonaddpoint )
         this.plot.redraw();
@@ -1924,6 +1935,7 @@ SVGPlot.Dataset.prototype.removePoint = function( name ) {
     this._x.splice( dex, 1 );
     this._y.splice( dex, 1 );
     this._pointnames.splice( dex, 1 );
+    if ( this._pointdata !== null ) this._pointdata.splice( dex, 1 );
     if ( this._dx.length > 0 ) this._dx.splice( dex, 1 );
     if ( this._dy.length > 0 ) this._dy.splice( dex, 1 );
     if ( this.plot != null && this.plot._redrawonaddpoint )
