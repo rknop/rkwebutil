@@ -837,6 +837,58 @@ rkWebUtil.colorIntToCSSColor = function( colint ) {
 }
 
 // **********************************************************************
+
+rkWebUtil.paramParser = function( default_params, params, target, in_parser_params={} )
+{
+    let default_parser_params = { 'error_if_unknown': true,
+                                  'alert_if_unknown': true,
+                                  'alert_prefix': "",
+                                  'assign_if_unknown': false,
+                                  'assign_only_known': true,
+                                  'recurse': false,
+                                  'recurse_params': null
+                                };
+    let parser_params = {};
+    // Let's skip the opportunity for infinite recursion here
+    Object.assign( parser_params, default_parser_params );
+    Object.assign( parser_params, in_parser_params );
+    Object.assign( parser_params.recurse_params, default_parser_params.recurse_params );
+    if ( in_parser_params.hasOwnProperty( recurse_params ) )
+        Object.assign( parser_params.recurse_params, in_parser_params.recurse_params );
+    if ( parser_params.recurse_params === null ) parser_params.recurse_params = parser_params;
+
+    if ( parser_params.error_if_unknown || parser_params.alert_if_unknown || ( ! parser_params.assign_if_unknown ) ) {
+        let unknown = [];
+        for ( let kw in params ) if ( ! default_params.hasOwnProperty(kw) ) unknown.push( kw );
+        if ( unknown.length > 0 ) {
+            let errmsg = parser_params.alert_prefix + "Unknown parameters: " + unknown.toString();
+            if ( parser_params.alert_if_unknown ) window.alert( errmsg );
+            if ( parser_params.error_if_unknown ) throw new Error( errmsg );
+            if ( ! assign_if_unknown ) return;
+        }
+    }
+
+    let assigner = (par) => {
+        if ( parser_params.recurse && params.hasOwnProperty(par) && default_params.hasOwnProperty(par) &&
+             ( typeof params[par] === 'object' ) && ( typeof default_params[par] === 'object' ) &&
+             ( ! Array.isArray( params[par] ) ) && ( ! Array.isArray( default_params[par] ) )  &&
+             ( params[par] !== null ) && ( default_params[par] !== null ) ) {
+            let subtarget = {};
+            rkWebUtil.paramParser( default_params[par], params[par], subtarget, parser_params.recurse_params );
+            target[par] = subtarget;
+        }
+        else if ( params.hasOwnProperty( par ) ) target[par] = params[par];
+        else target[par] = default_params[par];
+    };
+
+    // not using Object.assign here because I haven't figured out a quick way to just assign
+    //   a subset of properties without a for loop
+    if ( parser_params.assign_only_known ) for ( let kw in default_params ) assigner( kw );
+    else for ( let kw in params ) assigner( kw );
+};
+
+
+// **********************************************************************
 // **********************************************************************
 // **********************************************************************
 // A table that lets you sort by columns.

@@ -1,4 +1,149 @@
+// TODO : getter and setter for current group and current image that will update widgets and redraw and shit
+
 import { rkWebUtil } from "./rkwebutil.js"
+
+class ImViewGroup {
+    constructor( imview, inparams={} )
+    {
+        let defaults = { "name": null,
+                         "x0": null,
+                         "y0": null,
+                         "scale": null,
+                         "min": null,
+                         "max": null
+                       };
+        rkWebUtil.paramParser( defaults, inparams, this );
+        this.imview = imview;
+        this.images = {};
+        this.num_images = 0;
+        if ( this.name === null ) {
+            this.name = "imview-group-" + this.imview.num_groups.toString();
+        }
+        this.imview.num_groups += 1;
+        this.zoom_source = null;
+        this.scale_source = null;
+        this._current_image = null;
+    }
+
+    get current_image() {
+        if ( ( this._current_image == null ) || ( ! this.images.hasOwnProperty( this._current_image ) ) ) {
+            let keys = Object.keys( this.images );
+            if ( keys.length > 0 ) {
+                this._current_image = keys[0];
+            }
+            else {
+                this.current_image = null;
+            }
+        }
+        return ( this.current_image === null ) ? null : this.images[ this._current_image ];
+    }
+
+    set current_image( name ) {
+        if ( ! this.images.hasOwnProperty( name ) )
+            throw new Error( "Group doesn't have an image with name " + name );
+        this._current_image = name;
+    }
+
+    add_image( params, make_current=false ) {
+        let image = ImViewImage( params );
+        if ( this.images.hasOwnProperty( image.name ) ) {
+            throw new Error( "Error, group " + this.name + " already has an image with name " + image.name );
+        }
+        this.images[ image.name ] = image;
+        if ( make_current ) this._current_image = image.name;
+        return image.name;
+    }
+
+    remove_image( imagename, missing_ok=true ) {
+        if ( this.images.hasOwnProperty( imagename ) ) {
+            delete this.images[ imagename ];
+        }
+        else if ( ! missing_ok ) {
+            throw new Error( "Error, group " + this.name + " doesn't have an image with name " + image.name );
+        }
+    }
+}
+
+
+class ImViewImage {
+    constructor( imview, inparams={} )
+    {
+        let defaults = { "data": null,
+                         "width": null,
+                         "height": null,
+                         "name": null,
+                         "group": null,
+                         "start_with_group_zoom": true,
+                         "start_with_group_stretch": false,
+                         "zscale_samples": null,
+                         "zscale_contrast": null,
+                         "x0": null,
+                         "y0": null,
+                         "scale": null,
+                         "min": null,
+                         "max": null,
+                         "replace": false,
+                         "boxsets": []
+                       };
+        rkWebUtil.paramParser( defaults, imparams, this );
+        this.imview = imview;
+
+        if ( ( this.data == null ) || ( this.width == null ) || ( this.height == null ) ) {
+            throw new Error( "ImViewImage: must have non-null data, width, and height." )
+        }
+        // I am boggled AGAIN by javascript not having an integer datatype but making all numbers doubles
+        this.width = Math.floor( this.width );
+        this.height = Math.floor( this.height );
+        this.ndata = this.width * this.height;
+
+        if ( this.group == null ) this.group = this.imview.groups[ "_imview_root_group" ];
+        else {
+            if ( ! imview.groups.hasOwnProperty( this.group ) ) {
+                throw new Error( "Error, tried to add an image to unknown group " + this.group );
+            }
+            this.group = this.imview.groups[ this.group ];
+        }
+        if ( this.name === null ) {
+            this.name = "imview-image-" + this.group.name + this.group.num_images.toString();
+        }
+        this.group.num_images += 1;
+
+        if ( ( this.group.images.hasOwnProperty( this.name ) ) && ( ! this.replace ) )
+            throw new Error( "Error, group " + this.group.name + " already has an image with name " + this.name );
+
+        if ( this.zscale_samples === null ) this.zscale_samples = this.imview.zscale_samples;
+        if ( this.zscale_contrast === null ) this.zscale_contrast = this.imview.zscale_contrast;
+        this.zscale_samples = Math.min( this.zscale_samples, this.ndata );
+        let tmp = ImView.zscale( this.data, this.width, this.height, this.zscale_samples, this.zscale_contrast );
+        this.zmin = tmp[0];
+        this.zmax = tmp[1];
+
+        this.init_min = this.min;
+        this.init_max = this.max;
+        if ( this.start_with_group_stretch ) {
+            if ( this.init_min === null ) this.init_min = this.group.min;
+            if ( this.init_max === null ) this.init_max = this.group.max;
+        }
+        if ( this.init_min === null ) this.init_min = this.zmin;
+        if ( this.init_max === null ) this.init_max = this.zmax;
+        this.min = this.init_min;
+        this.max = this.init_max;
+
+        this.init_x0 = this.x0;
+        this.init_y0 = this.y0;
+        this.init_scale = this.scale;
+        if ( this.start_with_group_zoom ) {
+            this.init_x0 = this.group.x0;
+            this.init_y0 = this.group.y0;
+            this.init_scale = this.group.scale;
+        }
+        this.x0 = this.init_x0;
+        this.y0 = this.init_y0;
+        this.scale = this.init_scale;
+    }
+}
+
+
 
 class ImView {
     // data is stored in column-major format, like a FITS image.  It must be
@@ -8,6 +153,8 @@ class ImView {
     //    which is backwards from html display
 
     // scale is in display pixels per data pixel
+
+    // images are stored in groups; if a group isn't given, the default group is "_imview_root".
 
     // constructor two arguments; the first is a params, dictionary the second is a bool norender
     //
@@ -28,6 +175,703 @@ class ImView {
     // "name": null,
     // "clickcallback": null
 
+    // Global variables for tracking internal default names to avoid document id duplication
+
+    static numImViews = 0;
+    static numSquares = 0;
+
+    // ****************************************
+    // Constructor
+
+    constructor( inparams={} ) {
+        let self = this;
+        let hbox, vbox, but;
+
+        let defaults = { "parent_div": null,
+                         "clickcallback": null,
+                         "name": null,
+                         "show_image_name": false,
+                         "image_name_element": "h3",
+                         "show_group_selector": false,
+                         "show_image_selector": false,
+                         "show_x_y_val": true,
+                         "zoom_buttons": true,
+                         "show_copy_zoom_button": false,
+                         "copy_zoom_only_group": true,
+                         "stretch_widgets": true,
+                         "copy_stretch_button": false,
+                         "copy_stretch_only_group": true,
+                         "imview_div_id": "",
+                         "imview_id": "",
+                         "svg_id": "",
+                         "zscale_samples": 10000,   // These are defaults that any image can override
+                         "zscale_contrast": 0.25,
+                         "css_classes": {
+                             "imview": null,
+                             "canvaswrapper": null,
+                             "canvas": null,
+                             "svg": null,
+                             "zoominputwid": null,
+                             "stretchinputwid": null,
+                             "vbox": null,
+                             "hbox": null,
+                             "bold": null,
+                             "justifyleft": null,
+                             "justifycenter": null,
+                             "marginleftex": null
+                         },
+                         "css_colors": {
+                             "main": "black",
+                             "background": "white",
+                             "full": "black",
+                             "mostlyfull": "#666666"
+                         }
+                       };
+        rkWebUtil.paramParser( defaults, inparams, this, { 'recurse': true,
+                                                           'recurse_params': {
+                                                               'error_if_unknown': false,
+                                                               'alert_if_known': false,
+                                                               'assign_if_unknown': false,
+                                                               'assign_only_known': true,
+                                                               'recurse': false
+                                                           } } );
+
+        if ( this.name == null ) {
+            this.name = "imview-" + ImView.numImViews.toString();
+        }
+        // If Javascript ever becomes not-single-threaded, we're screwed.  But I bet a lot of people are screwed.
+        ImView.numImViews += 1;
+
+        this.groups = {};
+        this.current_group = null;
+        this.add_group( { 'name': '_imview_root_group', make_current: true } );
+
+        this.define_css_classes();
+        this.div = rkWebUtil.elemaker( "div", this.parent_div, { "id": this.imview_div_id,
+                                                                 "classes": [ this.css_classes.imview ] } );
+        this.image_name_div = null;
+        this.group_selector = null;
+        this.image_selector = null;
+        if ( this.show_image_selector || this.show_image_name ) {
+            this.image_name_div = rkWebUtil.elemaker(
+                "div", this.div, { "classes": [ this.css_classes.justifyleft, this.css_classes.hbox ] } );
+            if ( this.show_image_selector ) {
+                if ( this.show_group_selector ) {
+                    rkWebUtil.elemaker( "span", this.image_name_div, { "text": "Group:",
+                                                                       "classes": [ this.css_classes.bold ] } );
+                    this.group_selector = rkWebUtil.elemaker(
+                        "select", this.image_name_div, { "change": (e) => { self.select_group() } } );
+                    rkWebUtil.elemaker( "option", this.group_selector,
+                                        { "text": "<Root>", "attributes": { "value": "_imview_root_group",
+                                                                            "selected": 1 } } );
+                    rkWebUtil.elemaker( "span", this.image_name_div, { "text": "  " } );
+                }
+                rkWebUtil.elemaker( "span", this.image_name_div, { "text": "Image:",
+                                                                   "classes": [ this.css_classes.bold ] });
+                this.image_selector = rkWebUtil.elemaker(
+                    "select", this.image_name_div, { "change": (e) => { self.select_image() } } );
+                // Build the default image selector options
+                this.select_group();
+            }
+            else {
+                this.image_name_wid = rkWebUtil.elemaker( self.image_name_element, this.image_name_div,
+                                                          { "text": "<no image>" } );
+            }
+        }
+
+        this.infodiv = rkWebUtil.elemaker( "div", this.div,
+                                           { "classes": [ this.css_classes.justifyleft,
+                                                          this.css_classes.hbox ] } );
+        if ( this.show_x_y_val ) {
+            rkWebUtil.elemaker( "span", this.infodiv, { "text": "x:", "classes": [ this.css_classes.bold ] } );
+            this.xwidget = rkWebUtil.elemaker( "input", this.infodiv, { "attributes": { 'size': 8,
+                                                                                        'readonly': 1 } } );
+            rkWebUtil.elemaker( "span", this.infodiv, { "text": "  y:", "classes": [ this.css_classes.bold ] } );
+            this.ywidget = rkWebUtil.elemaker( "input", this.infodiv, { "attributes": { 'size': 8,
+                                                                                        'readonly': 1 } } );
+            rkWebUtil.elemaker( "span", this.infodiv, { "text": "  value:", "classes": [ this.css_classes.bold ] } );
+            this.valwidget = rkWebUtil.elemaker( "input", this.infodiv, { "attributes": { 'size': 10,
+                                                                                          'readonly': 1 } } );
+        }
+
+        this.canvasdiv = rkWebUtil.elemaker( "div", this.div, { "classes": [ this.css_classes.canvaswrapper ] } );
+        this.canvas = null;
+        this.svg = null;
+
+        this.stretchdiv = rkWebUtil.elemaker( "div", this.div,
+                                              { "classes": [ this.css_classes.justifycenter,
+                                                             this.css_classes.hbox ] } );
+        if ( this.stretch_widgets ) {
+            this.minwidget = rkWebUtil.elemaker( "input", this.stretchdiv,
+                                                 { "attributes": { "value": rkWebUtil.floatToString( this.min,
+                                                                                                     { "nullok": true }
+                                                                                                   ),
+                                                                   "size": 10 },
+                                                   "change": function() { self.set_stretch_and_render(); },
+                                                   "classes": [ this.css_classes.stretchinputwid ] } );
+            rkWebUtil.elemaker( "span", buttondiv, { "text": "  max:", "classes": [ 'bold' ] } );
+            this.maxwidget = rkWebUtil.elemaker( "input", this.stretchdiv,
+                                                 { "attributes": { "value": rkWebUtil.floatToString( this.max,
+                                                                                                     { "nullok": true }
+                                                                                                   ),
+                                                                   "size": 10 },
+                                                   "change": function() { self.set_stretch_and_render(); },
+                                                   "classes": [ this.css_classes.stretchinputwid ] } );
+            let but = rkWebUtil.button( this.stretchdiv, "Redraw", function() { self.set_stretch_and_render(); } );
+            but.classList.add( this.css_classes.marginleftex );
+            but = rkWebUtil.button( this.stretchdiv, "Reset Stretch", function() { self.reset_stretch(); } );
+            but.classList.add( this.css_classes.marginleftex );
+            but = rkWebUtil.button( this.stretchdiv, "ZScale", function() { self.zscale_stretch(); } );
+            but.classList.add( this.css_classes.marginleftex );
+            if ( this.copy_stretch_button ) {
+                but = rkWebUtil.button( this.stretchdiv, "Copy Stretch", function() { self.copy_stretch(); } );
+                but.classList.add( this.css_classes.marginleftex );
+            }
+        }
+
+        this.zoomdiv = rkWebUtil.elemaker( "div", this.div,
+                                           { "classes": [ this.css_classes.justifycenter,
+                                                          this.css_classes.hbox ] } );
+        if ( this.zoom_buttons ) {
+            let but = rkWebUtil.button( this.zoomdiv, "Reset Zoom", function() { self.reset_zoom(); } );
+            but = rkWebUtil.button( buttondiv, "Zoom Full", function() { self.zoom_full(); } );
+            but.classList.add( this.css_classes.marginleftex );
+            but = rkWebUtil.button( this.zoomdiv, "Zoom In", function() { self.zoom_in(); } );
+            but.classList.add( this.css_classes.marginleftex );
+            but = rkWebUtil.button( this.zoomdiv, "Zoom Out", function() { self.zoom_out(); } );
+            but.classList.add( this.css_classes.marginleftex );
+            if ( this.show_copy_zoom_button ) {
+                but = rkWebUtil.button( this.zoomdiv, "Copy Zoom", function() { self.copy_zoom(); } );
+                but.classList.add( this.css_classes.marginleftex );
+            }
+        }
+
+        this.dispwidth = null;
+        this.dispheight = null;
+        this.last_dispwidth = null;
+        this.last_dispheight = null;
+        this.resize_observer = new ResizeObserver( (wids) => { self.resized( wids ); } );
+        this.resize_observer.observe( this.canvasdiv );
+        // Make sure it's always called at least once so dispwidth and dispheight get initialized.
+        // This isn't necessary if this.parent_div is null, because the resize event *should*
+        //   be triggered when this.div is appendChilded to something.  However, if this.parentdiv
+        //   is not null, we appendChilded above before we had created this resize observer.
+        if ( this.parent_div !== null )
+            window.dispatchEvent( new Event( 'resize' ) );
+    }
+
+
+    add_group( params={}, make_current=false, exist_ok=true )
+    {
+        let group = null;
+        if ( params.hasOwnProperty( "name" ) && this.groups.hasOwnProperty( params['name'] ) ) {
+            if ( ! exist_ok ) {
+                throw Error( "Group " + params['name'] + " already exists." );
+            }
+            group = this.groups[ params['name'] ];
+        } else {
+            group = new ImViewGroup( this, params )
+            this.groups[ group.name ] = group;
+        }
+        if ( make_current ) {
+            if ( ( this.current_group === null ) || ( this.current_group.name != group.name ) ) {
+                this.current_group = this.groups[ group.name ];
+                this.render_image();
+            }
+        }
+    }
+
+    add_image( params, make_current=false, group=null, dont_make_current_if_no_current=false )
+    {
+        if ( group === null ) group = '_imview_root_group';
+        let newimagename = this.groups[ group ].add_image( params );
+        if ( ( ( this.current_group === null ) || ( this.current_group.current_image === null ) )
+             && ( ! dont_make_current_if_no_current ) ) make_current=true;
+        if ( make_current ) {
+            this.current_group = this.groups[ group ];
+            this.current_group.current_image = newimagename;
+            this.render_image();
+        }
+    }
+
+    static _default_css_classes_defined = false;
+
+    define_css_classes() {
+        let head = document.getElemntsByTagName( 'head' )[0];
+
+        let defaultstyle = (cls, styles, elemtype="") => {
+            if ( this.css_classes[cls] === null ) {
+                if ( ! ImView._default_css_classes_defined ) {
+                    let elem = document.createElement( "style" );
+                    elem.type = "text/css";
+                    let text = elemtype + "." + "_imview_" + cls + " {\n";
+                    for ( let prop in styles ) {
+                        text += "  " + prop + ":" + styles[prop] + ";\n";
+                    }
+                    text += "}";
+                    elem.innerHTML = text;
+                    head.appendChild( elem );
+                }
+                this.css_classes[style] = "_imview_" + cls;
+            }
+        }
+
+        defaultstyle( "imview", { "display": "flex",
+                                  "flex-direction": "column",
+                                  "justify-content": "flex-start",
+                                  "flex-grow": 1,
+                                  "flex-shrink": 1,
+                                  "min-width": 0,
+                                  "min-height": 0,
+                                  "padding": "1ex",
+                                  "border": "1px solid " + this.css_colors.full
+                                }, "div" );
+        defaultstyle( "canvaswrapper", { "position": "relative",
+                                         "margin": 0,
+                                         "padding": 0,
+                                         "border": 0 }, div );
+        defaultstyle( "canvas", { "position": "absolute",
+                                  "left": 0,
+                                  "top": 0,
+                                  "margin": 0,
+                                  "padding": 0,
+                                  "border": 0,
+                                  "z-index": 1,
+                                  "image-rendering": "pixelated"
+                                }, "canvas" )
+        defaultstyle( "svg", { "position": "absolute",
+                               "left": 0,
+                               "top": 0,
+                               "margin": 0,
+                               "padding": 0,
+                               "border": 0,
+                               "z-index":2,
+                               "pointer-events": "none"
+                             }, "svg" );
+        defaulttyle( "vbox", { "display": "flex",
+                               "flex-direction": "column",
+                               "min-width": 0,
+                               "min-height": 0
+                             }, "div" );
+        defaultstyle( "hbox", { "display": "flex",
+                                "flex-directon": "row",
+                                "min-width": 0,
+                                "min-height": 0
+                              }, "div" );
+        defaultstyle( "bold", { "font-weight": "bold" } );
+        defaultstyle( "justifyleft",  { "justify-content": "flex-start" } );
+        defaultstyle( "justifycenter", { "justify-content": "center" } );
+        defaultstyle( "zoominputwid", { "border-style": "outset", "border-color": this.css_colors.mostlyfull } );
+        defaultstyle( "stretchinputwid", { "border-style": "outset", "border-color": this.css_colors.mostlyfull } );
+        defaultstyle( "marginleftex", { "margin-left": "1ex" } );
+
+        ImView._default_css_classes_defined = true;
+    }
+
+    change_stretch( min, max ) {
+        this.min = min;
+        this.max = max;
+        this.render_image();
+    }
+
+
+    reset_stretch() {
+        this.min = this.init_min;
+        this.max = this.init_max;
+        this.render_image();
+    }
+
+
+    zscale_stretch() {
+        this.min = this.zmin;
+        this.max = this.zmax;
+        this.render_image();
+    }
+
+
+    reset_zoom() {
+        this.scale = this.init_scale;
+        this.x0 = this.init_x0;
+        this.y0 = this.init_y0;
+        this.render_image();
+    }
+
+
+    zoom_full() {
+        if ( ( this.dispheight / this.height ) < ( this.dispwidth / this.width ) ) {
+            this.scale = this.dispheight / this.height;
+        }
+        else {
+            this.scale = this.dispwidth / this.width;
+        }
+        this.x0 = ( this.width / 2. ) - ( this.dispwidth / 2. / this.scale );
+        this.y0 = ( this.height / 2. ) - ( this.dispheight / 2. / this.scale );
+        this.render_image();
+    }
+
+
+    zoom_out() {
+        this.scale /= 2.;
+        this.x0 -= this.dispwidth / 4. / this.scale;
+        this.y0 -= this.dispheight / 4. / this.scale;
+        this.render_image();
+    }
+
+
+    zoom_in() {
+        this.x0 += this.dispwidth / 4. / this.scale;
+        this.y0 += this.dispheight / 4. / this.scale;
+        this.scale *= 2.;
+        this.render_image();
+    }
+
+
+    set_stretch_and_render() {
+        this.min = parseFloat( this.minwidget.value );
+        this.max = parseFloat( this.maxwidget.value );
+        this.render_image();
+    }
+
+    resized( wids ) {
+        if ( wids.length != 1 ) {
+            window.alert( "I am surprised." );
+            throw new Error( "I don't understand ResizeObserver." );
+        }
+        let wid = wids[0];
+        this.dispwidth = wid.contentBoxSize[0].inlineSize;
+        this.dispheight = wid.contentBoxSize[0].blockSize;
+        if ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight) ) {
+            this.render_image();
+        }
+    }
+
+    render_image() {
+        if ( ( this.dispwidth === null ) || ( this.dispheight === null ) ) {
+            // I don't know how to do my stuff, so don't do it.
+            return;
+        }
+        if ( ( this.current_group == null ) || ( this.current_group.current_image == null ) ) {
+            // TODO render a default image
+            return;
+        }
+        let image = this.current_group.current_image;
+
+        let svgns = "http://www.w3.org/2000/svg";
+
+        // This if block will always trigger at least once because we set this.last_disp* = null in
+        //   the constructor, and the if above ensures this.disp* is not null
+        if ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight ) ) {
+            rkWebUtil.wipeDiv( this.canvasdiv );
+            if ( ( image.x0 === null ) || ( this.last_dispwidth === null ) ) {
+                image.scale = ( ( ( this.dispheight / image.height ) < ( this.dispwidth / image.width ) )
+                                ? this.dispheight / image.height : this.dispwidth / image.width );
+                image.x0 = ( image.width / 2. ) - ( this.dispwidth / 2. / image.scale );
+                image.y0 = ( image.height / 2. ) - ( this.dispheight / 2. / image.scale );
+            }
+            else {
+                // Set the new scale so that the same amount of stuff will be displayed on whichever
+                //    axis is smaller
+                let cx = image.x0 + ( this.last_dispwidth / 2. / image.scale );
+                let cy = image.y0 + ( this.last_dispheight / 2. / image.scale );
+                let oldlx = Math.max( image.x0, 0. );
+                let oldhx = Math.min( image.x0 + ( this.last_dispwidth / image.scale ), image.width );
+                let oldly = Math.max( image.y0, 0. );
+                let oldhy = Math.min( image.y0 + ( this.last_dispheight / image.scale ), image.height );
+                if ( ( this.dispwidth / ( oldhx - oldlx ) ) < ( this.dispheight / ( oldhy - oldly ) ) ) {
+                    image.scale = this.dispwidth / ( oldhx - oldlx );
+                } else {
+                    image.scale = this.dispheight / ( oldhy - oldly );
+                }
+                image.x0 = cx - ( this.dispwidth / 2. / image.scale );
+                image.y0 = cy - ( this.dispheight / 2. / image.scale );
+                // TODO : we need to modify the image.init_* here properly!
+                // (Then also move the setting of those below this else to the right place.)
+            }
+            if ( image.init_scale === null ) image.init_scale = image.scale;
+            if ( image.init_x0 === null ) image.init_x0 = image.x0;
+            if ( image.init_y0 === null ) image.init_y0 = image.y0;
+            this.last_dispwidth = this.dispwidth;
+            this.last_dispheight = this.dispheight;
+
+            this.canvas = rkWebUtil.elemaker( "canvas", this.canvas_div,
+                                              { "attributes": { "width": this.dispwidth,
+                                                                "height": this.dispheight },
+                                                "classes": [ this.css_classes.canvas ] } );
+            this.canvas.style.width = this.dispwidth.toString() + "px";
+            this.canvas.style.height = this.dispheight.toString() + "px";
+            this.canvas.addEventListener( "mousedown", (e) => { self.mousedown(e) } );
+            this.canvas.addEventListener( "mouseup", (e) => { self.mouseup(e) } );
+
+            this.svg = document.createElementNS( svgns, "svg" );
+            this.svg.setAttributeNS( 'http://www.w3.org/2000/xmlns/', "xmlns", svgns );
+            this.svg.classList.add( this.css_classes.svg );
+            this.svg.style.width = this.dispwidth.toString() + "px";
+            this.svg.style.height = this.dispheight.toString() + "px";
+            this.svg.setAttribute( "width", this.dispwidth );
+            this.svg.setAttribute( "hieght", this.dispheight );
+            this.svg.setAttribute( "id", this.svg_id );
+            this.canvas_div.appendChild( this.svg );
+        }
+        if ( ( image.x0 === null ) || ( this.canvas === null ) || ( this.svg === null ) )
+            throw new Error( "This should never happen." );
+
+        // Don't (yet?) support backwards color mapping
+        if ( image.max < image.min ) {
+            let tmp = image.min;
+            image.min = image.max;
+            image.max = tmp;
+            if ( this.stretch_widgets ) {
+                this.minwiget.value = min;
+                this.maxwidget.value = max;
+            }
+        }
+
+        let ctx = this.canvas.getCotnext( "2d", { 'alpha': false } );
+        let imagedata = ctx.createImageData( this.dispwidth, this.dispheight );
+
+        // Does javascript have vectorized stuff to make this faster?
+        // Note : remember that astronomical images have (0, 0) at the lower-left,
+        //   but browsers think (0, 0) is the upper-left.
+        for( let dispy = 0 ; dispy < this.dispheight ; ++dispy ) {
+            let off = dispy * this.dispwidth * 4;
+            let imgy = Math.round( ( this.dispheight - dispy ) / image.scale + image.y0 );
+            let yoffedge = ( imgy < 0 ) || ( imgy >= img.height );
+            let lastimgx = -1e32;
+            let bval = 0;
+            for ( let dispx = 0 ; dispx < this.dispwidth ; ++dispx ) {
+                let imgx = 0;
+                let offedge = yoffedge;
+                if ( ! offedge ) {
+                    imgx = Math.round( dispx / image.scale + image.x0 );
+                    offedge = ( imgx < 0 ) || ( imgx >= image.width );
+                }
+                if ( offedge ) {
+                    bval = 255;
+                }
+                else {
+                    if ( imgx != lastimgx ) {
+                        let val = image.data[ imgy * image.width + imgx ];
+                        bval = ImView.float_to_byte( val, image.min, image.max, 0 );
+                    }
+                }
+                imagedata.data[ off     ] = bval;
+                imagedata.data[ off + 1 ] = bval;
+                imagedata.data[ off + 2 ] = bval;
+                imagedata.data[ off + 3 ] = 255;
+                lastimgx = imgx;
+                off += 4;
+            }
+        }
+
+        this.ctx.putImageData( imagedata, 0, 0 );
+
+        // Make the overlay drawing svg, used both for square drawing and zooming
+
+        rkWebUtil.wipeDiv( this.svg );
+
+        let svgstyle = document.createElementNS( svgns, "style" );
+        this.svg.appendChild( svgstyle );
+        svgstyle.appendChild( document.createTextNode( ".zoombox-" + this.name +
+                                                       " { fill: none; stroke: #008800; stroke-width: 2; }" ) );
+        // Draw all squares
+        for ( let i in image.boxsets ) {
+            let boxes = image.boxsets[ i ];
+            let style = "svgbox-" + this.name + "-" + i.toString();
+            svgstyle.appendChild( document.createTextNode( "." + style +
+                                                           " { fill: none; stroke: " + boxes.color + "; " +
+                                                           "stroke-width: 2; }" ) );
+            for ( let square of boxes.boxes ) {
+                let rect = document.createElementNS( ns, "rect" );
+                let dispx = ( square.x - image.x0 ) * image.scale;
+                let dispy = image.dispheight - ( square.y - image.y0 ) * image.scale;
+                let dispwid = square.width * image.scale;
+                square.svgobj = document.createElementNS( ns, "rect" );
+                square.svgobj.setAttribute( "x", dispx - dispwid / 2. );
+                square.svgobj.setAttribute( "y", dispy - dispwid / 2. );
+                square.svgobj.setAttribute( "width", dispwid );
+                square.svgobj.setAttribute( "height", dispwid );
+                square.svgobj.setAttribute( "class", color );
+                this.svg.appendChild( square.svgobj );
+            }
+        }
+    }
+
+
+    canvasclick( evt ) {
+        let rect = evt.target.getBoundingClientRect();
+        let padw = evt.target.clientWidth - evt.target.scrollWidth;
+        let padh = evt.target.clientHeight - evt.target.scrollHeight;
+        let dispx = evt.clientX - rect.left - padw;
+        let dispy = evt.clientY - rect.top - padh;
+        // console.log( "Clicked at (" + dispx.toString() + ", " + dispy.toString() + ")" );
+    }
+
+    mousedown( evt ) {
+        if ( ( this.current_group == null ) || ( this.current_group.current_image == null ) ) {
+            // TOOD THINK : when would this happen?
+            return;
+        }
+
+        let self = this;
+
+        if ( this.zoombox != null ) {
+            this.svg.removeChild( this.zoombox );
+            this.zoombox = null;
+        }
+        this.zooming = false;
+        let rect = evt.target.getBoundingClientRect();
+        let padw = evt.target.clientWidth - evt.target.scrollWidth;
+        let padh = evt.target.clientHeight - evt.target.scrollHeight;
+        let dispx = evt.clientX - rect.left - padw;
+        let dispy = evt.clientY - rect.top - padh;
+        this.initmousex = dispx;
+        this.initmousey = dispy;
+        this.canvas.addEventListener( "mousemove", this.mousemovecallback );
+        this.dragging = true;
+    }
+
+    mousemove( evt ) {
+        if ( ! this.dragging ) return;
+
+        let self = this;
+        let rect = evt.target.getBoundingClientRect();
+        let padw = evt.target.clientWidth - evt.target.scrollWidth;
+        let padh = evt.target.clientHeight - evt.target.scrollHeight;
+        let dispx = evt.clientX - rect.left - padw;
+        let dispy = evt.clientY - rect.top - padh;
+
+        if ( ! this.zooming ) {
+            // ...what's a good minimum number of pixels moved to detect a zoom?
+            if ( ( dispx - this.initmousex > 5 ) || ( dispy - this.initmousey > 5 ) )
+                this.zooming = true;
+        }
+
+        if ( this.zooming ) {
+            if ( this.zoombox != null ) {
+                this.svg.removeChild( this.zoombox );
+            }
+            let ns = "http://www.w3.org/2000/svg";
+            this.zoombox = document.createElementNS( ns, "rect" );
+            this.zoombox.setAttribute( "class", "zoombox-" + this.name );
+            let x0 = this.initmousex;
+            if ( dispx < this.initmousex ) x0 = dispx;
+            let y0 = this.initmousey;
+            if ( dispy < this.initmousey ) y0 = dispy;
+            let width = Math.abs( dispx - this.initmousex );
+            let height = Math.abs( dispy - this.initmousey );
+            this.zoombox.setAttribute( "x", x0 );
+            this.zoombox.setAttribute( "y", y0 );
+            this.zoombox.setAttribute( "width", width );
+            this.zoombox.setAttribute( "height", height );
+            this.svg.appendChild( this.zoombox );
+        }
+    }
+
+    mouseup( evt ) {
+        if ( this.dragging ) {
+            this.canvas.removeEventListener( "mousemove", this.mousemovecallback );
+            this.dragging = false;
+        }
+
+        if ( ( this.current_group == null ) || ( this.current_group.current_image == null ) ) {
+            // TOOD THINK : when would this happen?
+            return;
+        }
+        let image = this.current_group.current_image;
+
+        let rect = evt.target.getBoundingClientRect();
+        // ...it seems like there ought to be a simpler javasript thing that says
+        //   "get me the position not iuncluding padding"
+        // (...though, in my case, I think the canvas has no padding, so some of
+        // this is gratuitous!)
+        let padw = evt.target.clientWidth - evt.target.scrollWidth;
+        let padh = evt.target.clientHeight - evt.target.scrollHeight;
+        let dispx = evt.clientX - rect.left - padw;
+        let dispy = evt.clientY - rect.top - padh;
+
+        if ( this.zooming ) {
+            this.zooming = false;
+            let imgx0 = this.initmousex / image.scale + image.x0;
+            let imgy0 = ( this.dispheight - this.initmousey ) / image.scale + image.y0;
+            let imgx1 = dispx / image.scale + image.x0;
+            let imgy1 = ( this.dispheight - dispy ) / image.scale + image.y0;
+            let ctrx = ( imgx0 + imgx1 ) / 2.;
+            let ctry = ( imgy0 + imgy1 ) / 2.;
+            let width = Math.abs( imgx1 - imgx0 );
+            let height = Math.abs( imgy1 - imgy0 );
+            let oldheight = this.dispheight / image.scale;
+            let oldwidth = this.dispwidth / image.scale;
+            if ( ( oldheight / height ) < ( oldwidth / width ) ) {
+                image.scale = this.dispheight / height;
+            } else {
+                image.scale = this.dispwidth / width;
+            }
+            image.x0 = ctrx - this.dispwidth / 2. / image.scale;
+            image.y0 = ctry - this.dispheight / 2. / image.scale;
+            this.render_image();
+        }
+        else {
+            let imgx = dispx / image.scale + image.x0;
+            let imgy = ( this.dispheight - dispy ) / image.scale + image.y0;
+            let iimgx = Math.round( imgx );
+            let iimgy = Math.round( imgy );
+            if ( this.show_x_y_val ){
+                this.xwidget.value = imgx.toFixed( 2 );
+                this.ywidget.value = imgy.toFixed( 2 );
+                if ( ( iimgx < 0 ) || ( iimgx >= image.width ) || ( iimgy < 0 ) || ( iimgy >= image.height ) ) {
+                    this.valwidget.value = "";
+                }
+                else {
+                    this.valwidget.value = rkWebUtil.floatToString( image.data[ iimgy * image.width + iimgx ],
+                                                                    { "nullok": true } );
+                }
+            }
+
+            // If shift-click, or if middle-click, then recenter
+            if ( ( ( evt.button == 0 ) && ( evt.shiftKey ) ) || ( evt.button == 1 ) ) {
+                this.x0 = iimgx - this.dispwidth / 2. / image.scale;
+                this.y0 = iimgy - this.dispheight / 2. / image.scale;
+                this.render_image();
+            }
+
+            // External callback
+            if ( this.clickcallback != null ) {
+                this.clickcallback( imgx, imgy );
+            }
+        }
+    }
+
+
+    // addsquare( x, y, width="10", color="blue", name=null ) {
+    //     // Does NOT rerender.  Must call render_image manually after
+    //     //   calling a bunch of addsquare
+
+    //     if ( name == null ) {
+    //         name = "imview-square-" + ImView.numSquares;
+    //     }
+    //     ImView.numSquares += 1;
+
+    //     // TODO VALIDATE COLOR
+
+    //     let square = { "name": name, "x": x, "y": y, "width": width, "color": color };
+    //     let ns = "http://www.w3.org/2000/svg";
+    //     let rect = document.createElementNS( ns, "rect" );
+    //     let dispx = ( x - this.x0 ) * this.scale;
+    //     let dispy = this.dispheight - ( y - this.y0 ) * this.scale;
+    //     let dispwid = width * this.scale;
+    //     square.svgobj = document.createElementNS( ns, "rect" );
+    //     square.svgobj.setAttribute( "x", dispx - dispwid / 2. );
+    //     square.svgobj.setAttribute( "y", dispy - dispwid / 2. );
+    //     square.svgobj.setAttribute( "width", dispwid );
+    //     square.svgobj.setAttribute( "height", dispwid );
+    //     square.svgobj.setAttribute( "class", color + "-" + this.name );
+    //     this.svg.appendChild( square.svgobj );
+    //     this.squares.push( square );
+    // }
+
+    // **********************************************************************
+    // Static methods
+
     // Static methods for dealing with float/byte data and for zscaling
 
     static float_to_byte( f, min, max, nanvalue=0 )
@@ -46,6 +890,11 @@ class ImView {
         return iarr[0] === 256;
     }
 
+    // zscale functions were stolen from
+    //   https://github.com/spacetelescope/stsci.numdisplay/blob/master/lib/stsci/numdisplay/zscale.py
+    // and converted to Javascript.  That git archive has a BSD-like licence with:
+    //   Copyright (C) 2005 Association of Universities for Research in Astronomy (AURA)
+
     static MAX_REJECT = 0.5;
     static MIN_NPIXELS = 5;
     static GOOD_PIXEL = 0;
@@ -53,10 +902,57 @@ class ImView {
     static KREJ = 2.5;
     static MAX_ITERATIONS = 5;
 
-    // zscale functions (here and below) were stolen from
-    //   https://github.com/spacetelescope/stsci.numdisplay/blob/master/lib/stsci/numdisplay/zscale.py
-    // and converted to Javascript.  That git archive has a BSD-like licence with:
-    //   Copyright (C) 2005 Association of Universities for Research in Astronomy (AURA)
+    static zscale( data, width, height, nsamples=1000, contrast=0.25 ) {
+        // Implement IRAF zscale algorithm
+
+        let samples = ImView.zsc_sample( nsamples, data, width, height );
+        return ImView.zsc_limits( samples, contrast, true );
+    }
+
+    static zsc_sample( maxpix, data, width, height ) {
+        // Figure out which pixels to use for the zscale algorithm
+        // Returns the 1-d array samples
+        // Sample in a square grid, and return the first maxpix in the sample
+        //
+        // RKNOP 2026-07-21 : modified this a bit from the stsci python source.
+        //   Want to build around the center rather than the lower left.
+        //   This is probably overdone, but whatevs.
+        let samples = [];
+        let stride;
+        if ( height > width ) stride = Math.round( width / Math.sqrt(maxpix) );
+        else stride = Math.round( height / Math.sqrt(maxpix) );
+        stride = Math.max( stride, 1 );
+        let nx = Math.floor( width / stride );
+        let ny = Math.floor( height / stride );
+        if ( nx * ny < maxpix ) maxpix = nx * ny;
+        let x0 = Math.floor( stride * nx / 2. );
+        let y0 = Math.floor( stride * ny / 2. );
+        let y = y0
+        let dy = stride;
+        while ( ( y >= 0 ) && ( y <= height ) ) {
+            let off = y * width;
+            let x = x0;
+            let dx = stride;
+            while ( ( x >= 0 ) && ( x <= width ) ) {
+                let val = data[ off + x ];
+                if ( ! isNaN(val) ) samples.push( val );
+                if ( samples.length >= maxpix )
+                    break;
+                if ( x <= x0 ) x += dx; else x -= dx;
+                dx += stride;
+            }
+            if ( samples.length >= maxpix )
+                break;
+            if ( y <= y0 ) y += dy; else y -= dy;
+            dy += stride;
+        }
+        if ( samples.length > maxpix ) {
+            window.alert( "ERROR: This should never happen." )
+            return;
+        }
+
+        return new Float32Array( samples );
+    }
 
     static zsc_limits( samples, contrast, nukesamples=false ) {
         if ( ! nukesamples ) {
@@ -221,552 +1117,8 @@ class ImView {
                  'sigma': sigma };
     }
 
-
-    // Global variables for tracking internal default names to avoid document id duplication
-
-    static numImViews = 0;
-    static numSquares;
-
-    constructor( inparams={}, norender=false ) {
-        var self = this;
-        let hbox, vbox, but;
-
-        let defaults = { "data": null,
-                         "width": null,
-                         "height": null,
-                         "dispwidth": 600,
-                         "dispheight": 600,
-                         "x0": null,
-                         "y0": null,
-                         "scale": null,
-                         "parent": null,
-                         "min": null,
-                         "max": null,
-                         "zscale_samples": 10000,
-                         "zscale_contrast": 0.25,
-                         "name": null,
-                         "clickcallback": null
-                       };
-        let unknown = [];
-        for ( let kw in inparams ) if ( ! defaults.hasOwnProperty(kw) ) unknown.push( kw )
-        if ( unknown.length > 0 ) {
-            window.alert( "ERROR: Unknown parameters passed to ImView: " + unknown.toString() );
-            return;
-        }
-        Object.assign( this, defaults );
-        Object.assign( this, inparams );
-
-        if ( this.name == null ) {
-            this.name = "imview-" + ImView.numImViews.toString();
-        }
-        ImView.numImViews += 1;
-
-        if ( ( this.data == null ) || ( this.width == null ) || ( this.height == null ) ) {
-            window.alert( "ImView: must have non-null data, width, and height." )
-            return;
-        }
-
-        this.ndata = this.width * this.height;
-
-        if ( ( this.data instanceof Float32Array ) || ( this.data instanceof Float64Array ) )
-        {
-            if ( this.data.length != this.ndata ) {
-                window.alert( "Imview: data length " + this.data.length.toString() +
-                              " doesn't match width × height = " + this.width.toString() +
-                              " × " + this.height.toString() + " = " + this.ndata.toString() );
-                return;
-            }
-        }
-        else {
-            window.alert( "ImView: data must be a Float32Array or Float64Array" );
-        }
-
-        this.zscale_samples = Math.min( this.zscale_samples, this.ndata );
-
-        let tmp = this.zscale( this.zscale_samples, this.zscale_contrast );
-        this.zmin = tmp[0];
-        this.zmax = tmp[1];
-
-        this.init_min = this.min;
-        this.init_max = this.max;
-        if ( this.init_min == null ) this.init_min = this.zmin;
-        if ( this.init_max == null ) this.init_max = this.zmax;
-        this.min = this.init_min;
-        this.max = this.init_max;
-
-        this.init_scale = this.scale;
-        this.init_x0 = this.x0;
-        this.init_y0 = this.y0;
-        if ( this.init_scale == null ) {
-            if ( ( this.dispheight / this.height ) < ( this.dispwidth / this.width ) ) {
-                this.init_scale = this.dispheight / this.height;
-            }
-            else {
-                this.init_scale = this.dispwidth / this.width;
-            }
-        }
-        this.scale = this.init_scale;
-        if ( this.init_x0 == null ) {
-            this.init_x0 = ( this.width / 2. ) - ( this.dispwidth / 2. / this.scale );
-        }
-        this.x0 = this.init_x0;
-        if ( this.init_y0 == null ) {
-            this.init_y0 = ( this.height / 2. ) - ( this.dispheight / 2. / this.scale );
-        }
-        this.y0 = this.init_y0;
-
-        this.squares = [];
-        this.zoombox = null;
-        this.zooming = false;
-        this.dragging = false;
-        this.initmousex = -99999;
-        this.initmousey = -99999;
-        this.mousemovecallback = function(e) { self.mousemove(e); };
-
-        this.div = rkWebUtil.elemaker( "div", this.parent );
-        // ...I must be overdoing this.  There must be a better way to get the flexbox model
-        //   do what I want.
-        let tophbox = rkWebUtil.elemaker( "div", this.div, { "classes": [ "hbox", "justifyleft" ] } );
-        vbox = rkWebUtil.elemaker( "div", tophbox, { "classes": [ "imview_topdiv" ] } );
-
-        this.infodiv = rkWebUtil.elemaker( "div", vbox, { "classes": [ 'hbox', 'justifycenter' ] } );
-        rkWebUtil.elemaker( "span", this.infodiv, { "text": "x:", "classes": [ 'bold' ] } );
-        this.xwidget = rkWebUtil.elemaker( "input", this.infodiv, { "attributes": { 'size': 8,
-                                                                                    'readonly': 1 } } );
-        rkWebUtil.elemaker( "span", this.infodiv, { "text": "  y:", "classes": [ 'bold' ] } );
-        this.ywidget = rkWebUtil.elemaker( "input", this.infodiv, { "attributes": { 'size': 8,
-                                                                                    'readonly': 1 } } );
-        rkWebUtil.elemaker( "span", this.infodiv, { "text": "  value:", "classes": [ 'bold' ] } );
-        this.valwidget = rkWebUtil.elemaker( "input", this.infodiv, { "attributes": { 'size': 10,
-                                                                                      'readonly': 1 } } );
-        this.top_buttonbox = tophbox;
-
-        hbox = rkWebUtil.elemaker( "div", vbox, { "classes": [ "hbox", "justifyleft" ] } );
-        this.canvasdiv = rkWebUtil.elemaker( "div", hbox, { "classes": [ 'imview_canvasdiv' ] } );
-        this.canvaswrapper = rkWebUtil.elemaker( "div", this.canvasdiv, { "classes": [ "imview_canvaswrapper" ] } );
-        this.canvaswrapper.style.width = this.dispwidth.toString() + "px";
-        this.canvaswrapper.style.height = this.dispheight.toString() + "px";
-        this.canvas = rkWebUtil.elemaker( "canvas", this.canvaswrapper,
-                                          { "attributes": { "width": this.dispwidth,
-                                                            "height": this.dispheight },
-                                            "classes": [ "imview_canvas" ],
-                                          } );
-        this.canvas.style.width = this.dispwidth.toString() + "px";
-        this.canvas.style.height = this.dispheight.toString() + "px";
-        this.canvas.addEventListener( "mousedown", (e) => { self.mousedown(e) } );
-        this.canvas.addEventListener( "mouseup", (e) => { self.mouseup(e); } );
-
-        let ns = "http://www.w3.org/2000/svg";
-
-        // Can't use rkWebUtil.elemaker because we need createElementNS
-        this.svg = document.createElementNS( ns, "svg" );
-        this.svg.setAttributeNS( 'http://www.w3.org/2000/xmlns/', "xmlns", ns );
-        this.svg.classList.add( "imview_svg" );
-        this.svg.style.width = this.dispwidth.toString() + "px";
-        this.svg.style.height = this.dispheight.toString() + "px";
-        this.svg.setAttribute( "width", this.dispwidth );
-        this.svg.setAttribute( "height", this.dispheight );
-        this.svg.setAttribute( "viewBox", "0 0 " + this.dispwidth + " " + this.dispheight );
-        this.svg.setAttribute( "id", this.name + "-svg" );
-        this.canvaswrapper.appendChild( this.svg );
-
-        let buttondiv = rkWebUtil.elemaker( "div", vbox, { "classes": [ 'hbox', 'justifycenter' ] } );
-        rkWebUtil.elemaker( "span", buttondiv, { "text": "min:", "classes": [ 'bold' ] } );
-        this.minwidget = rkWebUtil.elemaker( "input", buttondiv,
-                                             { "attributes": { "value": rkWebUtil.floatToString( this.min,
-                                                                                                 { "nullok": true }
-                                                                                               ),
-                                                               "size": 10 },
-                                               "change": function() { self.set_stretch_and_render(); },
-                                               "classes": [ 'outsetborder' ] } );
-        rkWebUtil.elemaker( "span", buttondiv, { "text": "  max:", "classes": [ 'bold' ] } );
-        this.maxwidget = rkWebUtil.elemaker( "input", buttondiv,
-                                             { "attributes": { "value": rkWebUtil.floatToString( this.max,
-                                                                                                 { "nullok": true }
-                                                                                               ),
-                                                               "size": 10 },
-                                               "change": function() { self.set_stretch_and_render(); },
-                                               "classes": [ 'outsetborder' ] } );
-        but = rkWebUtil.button( buttondiv, "Redraw", function() { self.set_stretch_and_render(); } );
-        but.classList.add( "marginleftex" );
-        but = rkWebUtil.button( buttondiv, "Reset Stretch", function() { self.reset_stretch(); } );
-        but.classList.add( "marginleftex" );
-        but = rkWebUtil.button( buttondiv, "ZScale", function() { self.zscale_stretch(); } );
-        but.classList.add( "marginleftex" );
-        this.stretch_buttonbox = buttondiv;
-
-
-        buttondiv = rkWebUtil.elemaker( "div", vbox, { "classes": [ 'hbox', 'justifycenter' ] } );
-        rkWebUtil.button( buttondiv, "Reset Zoom", function() { self.reset_zoom(); } );
-        but = rkWebUtil.button( buttondiv, "Zoom Full", function() { self.zoom_full(); } );
-        but.classList.add( "marginleftex" );
-        but = rkWebUtil.button( buttondiv, "Zoom In", function() { self.zoom_in(); } );
-        but.classList.add( "marginleftex" );
-        but = rkWebUtil.button( buttondiv, "Zoom Out", function() { self.zoom_out(); } );
-        but.classList.add( "marginleftex" );
-        this.zoom_buttonbox = buttondiv;
-
-        this.ctx = this.canvas.getContext( "2d" );
-
-        if ( ! norender ) this.render_image();
-    }
-
-
-    zscale( nsamples=1000, contrast=0.25 ) {
-        // Implement IRAF zscale algorithm
-
-        let samples = this.zsc_sample( nsamples );
-        return ImView.zsc_limits( samples, contrast, true );
-    }
-
-    zsc_sample( maxpix ) {
-        // Figure out which pixels to use for the zscale algorithm
-        // Returns the 1-d array samples
-        // Sample in a square grid, and return the first maxpix in the sample
-        //
-        // RKNOP 2026-07-21 : modified this a bit from the stsci python source.
-        //   Want to build around the center rather than the lower left.
-        //   This is probably overdone, but whatevs.
-        let samples = [];
-        let stride;
-        if ( this.height > this.width ) stride = Math.round( this.width / Math.sqrt(maxpix) );
-        else stride = Math.round( this.height / Math.sqrt(maxpix) );
-        stride = Math.max( stride, 1 );
-        let nx = Math.floor( this.width / stride );
-        let ny = Math.floor( this.height / stride );
-        if ( nx * ny < maxpix ) maxpix = nx * ny;
-        let x0 = Math.floor( stride * nx / 2. );
-        let y0 = Math.floor( stride * ny / 2. );
-        let y = y0
-        let dy = stride;
-        while ( ( y >= 0 ) && ( y <= this.height ) ) {
-            let off = y * this.width;
-            let x = x0;
-            let dx = stride;
-            while ( ( x >= 0 ) && ( x <= this.width ) ) {
-                let val = this.data[ off + x ];
-                if ( ! isNaN(val) ) samples.push( val );
-                if ( samples.length >= maxpix )
-                    break;
-                if ( x <= x0 ) x += dx; else x -= dx;
-                dx += stride;
-            }
-            if ( samples.length >= maxpix )
-                break;
-            if ( y <= y0 ) y += dy; else y -= dy;
-            dy += stride;
-        }
-        if ( samples.length > maxpix ) {
-            window.alert( "ERROR: This should never happen." )
-            return;
-        }
-
-        return new Float32Array( samples );
-    }
-
-    change_stretch( min, max ) {
-        this.min = min;
-        this.max = max;
-        this.render_image();
-    }
-
-
-    reset_stretch() {
-        this.min = this.init_min;
-        this.max = this.init_max;
-        this.render_image();
-    }
-
-
-    zscale_stretch() {
-        this.min = this.zmin;
-        this.max = this.zmax;
-        this.render_image();
-    }
-
-
-    reset_zoom() {
-        this.scale = this.init_scale;
-        this.x0 = this.init_x0;
-        this.y0 = this.init_y0;
-        this.render_image();
-    }
-
-
-    zoom_full() {
-        if ( ( this.dispheight / this.height ) < ( this.dispwidth / this.width ) ) {
-            this.scale = this.dispheight / this.height;
-        }
-        else {
-            this.scale = this.dispwidth / this.width;
-        }
-        this.x0 = ( this.width / 2. ) - ( this.dispwidth / 2. / this.scale );
-        this.y0 = ( this.height / 2. ) - ( this.dispheight / 2. / this.scale );
-        this.render_image();
-    }
-
-
-    zoom_out() {
-        this.scale /= 2.;
-        this.x0 -= this.dispwidth / 4. / this.scale;
-        this.y0 -= this.dispheight / 4. / this.scale;
-        this.render_image();
-    }
-
-
-    zoom_in() {
-        this.x0 += this.dispwidth / 4. / this.scale;
-        this.y0 += this.dispheight / 4. / this.scale;
-        this.scale *= 2.;
-        this.render_image();
-    }
-
-
-    set_stretch_and_render() {
-        this.min = parseFloat( this.minwidget.value );
-        this.max = parseFloat( this.maxwidget.value );
-        this.render_image();
-    }
-
-    render_image() {
-        // Don't (yet?) support backwards color mapping
-        if ( this.max < this.min ) {
-            let tmp = this.min;
-            this.min = this.max;
-            this.max = tmp;
-        }
-
-        let imagedata = this.ctx.createImageData( this.dispwidth, this.dispheight );
-
-        // Does javascript have vectorized stuff to make this faster?
-        // Note : remember that astronomical images have (0, 0) at the lower-left,
-        //   but browsers think (0, 0) is the upper-left.
-        for( let dispy = 0 ; dispy < this.dispheight ; ++dispy ) {
-            let off = dispy * this.dispwidth * 4;
-            let imgy = Math.round( ( this.dispheight - dispy ) / this.scale + this.y0 );
-            let yoffedge = ( imgy < 0 ) || ( imgy >= this.height );
-            let lastimgx = -1e32;
-            let bval = 0;
-            for ( let dispx = 0 ; dispx < this.dispwidth ; ++dispx ) {
-                let imgx = 0;
-                let offedge = yoffedge;
-                if ( ! offedge ) {
-                    imgx = Math.round( dispx / this.scale + this.x0 );
-                    offedge = ( imgx < 0 ) || ( imgx >= this.width );
-                }
-                if ( offedge ) {
-                    bval = 255;
-                }
-                else {
-                    if ( imgx != lastimgx ) {
-                        let val = this.data[ imgy * this.width + imgx ];
-                        bval = ImView.float_to_byte( val, this.min, this.max, 0 );
-                    }
-                }
-                imagedata.data[ off     ] = bval;
-                imagedata.data[ off + 1 ] = bval;
-                imagedata.data[ off + 2 ] = bval;
-                imagedata.data[ off + 3 ] = 255;
-                lastimgx = imgx;
-                off += 4;
-            }
-        }
-
-        this.ctx.putImageData( imagedata, 0, 0 );
-
-        rkWebUtil.wipeDiv( this.svg );
-        this.zoombox = null;
-
-        let ns = "http://www.w3.org/2000/svg";
-        // Make sure the svg has the defined box colors
-        let svgstyle = document.createElementNS( ns, "style" );
-        this.svg.appendChild( svgstyle );
-        svgstyle.appendChild( document.createTextNode( ".zoombox-" + this.name +
-                                                       " { fill: none; stroke: #008800; stroke-width: 2; }" ) );
-        svgstyle.appendChild( document.createTextNode( ".red-" + this.name +
-                                                       " { fill: none; stroke: #cc0000; stroke-width: 2; }" ) );
-        svgstyle.appendChild( document.createTextNode( ".green-" + this.name +
-                                                       " { fill: none; stroke: #00cc00; stroke-width: 2; }" ) );
-        svgstyle.appendChild( document.createTextNode( ".blue-" + this.name +
-                                                       " { fill: none; stroke: #2244cc; stroke-width: 2; }" ) );
-
-        // Draw all squares
-        for ( let square of this.squares ) {
-            let rect = document.createElementNS( ns, "rect" );
-            let dispx = ( square.x - this.x0 ) * this.scale;
-            let dispy = this.dispheight - ( square.y - this.y0 ) * this.scale;
-            let dispwid = square.width * this.scale;
-            square.svgobj = document.createElementNS( ns, "rect" );
-            square.svgobj.setAttribute( "x", dispx - dispwid / 2. );
-            square.svgobj.setAttribute( "y", dispy - dispwid / 2. );
-            square.svgobj.setAttribute( "width", dispwid );
-            square.svgobj.setAttribute( "height", dispwid );
-            square.svgobj.setAttribute( "class", square.color + "-" + this.name );
-            this.svg.appendChild( square.svgobj );
-        }
-    }
-
-
-    canvasclick( evt ) {
-        let rect = evt.target.getBoundingClientRect();
-        let padw = evt.target.clientWidth - evt.target.scrollWidth;
-        let padh = evt.target.clientHeight - evt.target.scrollHeight;
-        let dispx = evt.clientX - rect.left - padw;
-        let dispy = evt.clientY - rect.top - padh;
-        // console.log( "Clicked at (" + dispx.toString() + ", " + dispy.toString() + ")" );
-    }
-
-    mousedown( evt ) {
-        let self = this;
-
-        if ( this.zoombox != null ) {
-            this.svg.removeChild( this.zoombox );
-            this.zoombox = null;
-        }
-        this.zooming = false;
-        let rect = evt.target.getBoundingClientRect();
-        let padw = evt.target.clientWidth - evt.target.scrollWidth;
-        let padh = evt.target.clientHeight - evt.target.scrollHeight;
-        let dispx = evt.clientX - rect.left - padw;
-        let dispy = evt.clientY - rect.top - padh;
-        this.initmousex = dispx;
-        this.initmousey = dispy;
-        this.canvas.addEventListener( "mousemove", this.mousemovecallback );
-        this.dragging = true;
-    }
-
-    mousemove( evt ) {
-        if ( ! this.dragging ) return;
-
-        let self = this;
-        let rect = evt.target.getBoundingClientRect();
-        let padw = evt.target.clientWidth - evt.target.scrollWidth;
-        let padh = evt.target.clientHeight - evt.target.scrollHeight;
-        let dispx = evt.clientX - rect.left - padw;
-        let dispy = evt.clientY - rect.top - padh;
-
-        if ( ! this.zooming ) {
-            // ...what's a good minimum number of pixels moved to detect a zoom?
-            if ( ( dispx - this.initmousex > 5 ) || ( dispy - this.initmousey > 5 ) )
-                this.zooming = true;
-        }
-
-        if ( this.zooming ) {
-            if ( this.zoombox != null ) {
-                this.svg.removeChild( this.zoombox );
-            }
-            let ns = "http://www.w3.org/2000/svg";
-            this.zoombox = document.createElementNS( ns, "rect" );
-            this.zoombox.setAttribute( "class", "zoombox-" + this.name );
-            let x0 = this.initmousex;
-            if ( dispx < this.initmousex ) x0 = dispx;
-            let y0 = this.initmousey;
-            if ( dispy < this.initmousey ) y0 = dispy;
-            let width = Math.abs( dispx - this.initmousex );
-            let height = Math.abs( dispy - this.initmousey );
-            this.zoombox.setAttribute( "x", x0 );
-            this.zoombox.setAttribute( "y", y0 );
-            this.zoombox.setAttribute( "width", width );
-            this.zoombox.setAttribute( "height", height );
-            this.svg.appendChild( this.zoombox );
-        }
-    }
-
-    mouseup( evt ) {
-        if ( this.dragging ) {
-            this.canvas.removeEventListener( "mousemove", this.mousemovecallback );
-            this.dragging = false;
-        }
-
-        let rect = evt.target.getBoundingClientRect();
-        // ...it seems like there ought to be a simpler javasript thing that says
-        //   "get me the position not iuncluding padding"
-        // (...though, in my case, I think the canvas has no padding, so some of
-        // this is gratuitous!)
-        let padw = evt.target.clientWidth - evt.target.scrollWidth;
-        let padh = evt.target.clientHeight - evt.target.scrollHeight;
-        let dispx = evt.clientX - rect.left - padw;
-        let dispy = evt.clientY - rect.top - padh;
-
-        if ( this.zooming ) {
-            this.zooming = false;
-            let imgx0 = this.initmousex / this.scale + this.x0;
-            let imgy0 = ( this.dispheight - this.initmousey ) / this.scale + this.y0;
-            let imgx1 = dispx / this.scale + this.x0;
-            let imgy1 = ( this.dispheight - dispy ) / this.scale + this.y0;
-            let ctrx = ( imgx0 + imgx1 ) / 2.;
-            let ctry = ( imgy0 + imgy1 ) / 2.;
-            let width = Math.abs( imgx1 - imgx0 );
-            let height = Math.abs( imgy1 - imgy0 );
-            let oldheight = this.dispheight / this.scale;
-            let oldwidth = this.dispwidth / this.scale;
-            if ( ( oldheight / height ) < ( oldwidth / width ) ) {
-                this.scale = this.dispheight / height;
-            } else {
-                this.scale = this.dispwidth / width;
-            }
-            this.x0 = ctrx - this.dispwidth / 2. / this.scale;
-            this.y0 = ctry - this.dispheight / 2. / this.scale;
-            this.render_image();
-        }
-        else {
-            let imgx = dispx / this.scale + this.x0;
-            let imgy = ( this.dispheight - dispy ) / this.scale + this.y0;
-            this.xwidget.value = imgx.toFixed( 2 );
-            this.ywidget.value = imgy.toFixed( 2 );
-            let iimgx = Math.round( imgx );
-            let iimgy = Math.round( imgy );
-            if ( ( iimgx < 0 ) || ( iimgx >= this.width ) || ( iimgy < 0 ) || ( iimgy >= this.height ) ) {
-                this.valwidget.value = "";
-            }
-            else {
-                this.valwidget.value = rkWebUtil.floatToString( this.data[ iimgy * this.width + iimgx ],
-                                                                { "nullok": true } );
-            }
-
-            // If shift-click, or if middle-click, then recenter
-            if ( ( ( evt.button == 0 ) && ( evt.shiftKey ) ) || ( evt.button == 1 ) ) {
-                this.x0 = iimgx - this.dispwidth / 2. / this.scale;
-                this.y0 = iimgy - this.dispheight / 2. / this.scale;
-                this.render_image();
-            }
-
-            // External callback
-            if ( this.clickcallback != null ) {
-                this.clickcallback( imgx, imgy );
-            }
-        }
-    }
-
-
-    addsquare( x, y, width="10", color="blue", name=null ) {
-        // Does NOT rerender.  Must call render_image manually after
-        //   calling a bunch of addsquare
-
-        if ( name == null ) {
-            name = "imview-square-" + ImView.numSquares;
-        }
-        ImView.numSquares += 1;
-
-        // TODO VALIDATE COLOR
-
-        let square = { "name": name, "x": x, "y": y, "width": width, "color": color };
-        let ns = "http://www.w3.org/2000/svg";
-        let rect = document.createElementNS( ns, "rect" );
-        let dispx = ( x - this.x0 ) * this.scale;
-        let dispy = this.dispheight - ( y - this.y0 ) * this.scale;
-        let dispwid = width * this.scale;
-        square.svgobj = document.createElementNS( ns, "rect" );
-        square.svgobj.setAttribute( "x", dispx - dispwid / 2. );
-        square.svgobj.setAttribute( "y", dispy - dispwid / 2. );
-        square.svgobj.setAttribute( "width", dispwid );
-        square.svgobj.setAttribute( "height", dispwid );
-        square.svgobj.setAttribute( "class", color + "-" + this.name );
-        this.svg.appendChild( square.svgobj );
-        this.squares.push( square );
-    }
 }
 
 // **********************************************************************
 
-export { ImView }
+export { ImView, ImViewImage, ImViewGroup }
