@@ -33,10 +33,10 @@ class ImViewGroup {
                 this._current_image = keys[0];
             }
             else {
-                this.current_image = null;
+                this._current_image = null;
             }
         }
-        return ( this.current_image === null ) ? null : this.images[ this._current_image ];
+        return ( this._current_image === null ) ? null : this.images[ this._current_image ];
     }
 
     set current_image( name ) {
@@ -45,13 +45,12 @@ class ImViewGroup {
         this._current_image = name;
     }
 
-    add_image( params, make_current=false ) {
-        let image = ImViewImage( params );
+    add_image( params ) {
+        let image = new ImViewImage( this.imview, params );
         if ( this.images.hasOwnProperty( image.name ) ) {
             throw new Error( "Error, group " + this.name + " already has an image with name " + image.name );
         }
         this.images[ image.name ] = image;
-        if ( make_current ) this._current_image = image.name;
         return image.name;
     }
 
@@ -88,16 +87,15 @@ class ImViewImage {
                          "boxsets": [],
                          "info": {}
                        };
-        let tmp = {};
-        rkWebUtil.paramParser( defaults, imparams, tmp );
+        rkWebUtil.paramParser( defaults, inparams, this );
 
         if ( this.data !== null ) {
             if ( ( this.width === null ) || ( this.height === null ) )
                 throw Error( "Must pass width and height with data" );
-            this.init_data( data, width, height );
+            this.init_data( this.data, this.width, this.height );
         }
         else if ( this.data_getter === null ) {
-            throw Error( "Must either pass (image, width, height) or data_promise" );
+            throw Error( "Must either pass (image, width, height) or data_getter" );
         }
 
         this.imview = imview;
@@ -116,23 +114,25 @@ class ImViewImage {
     }
 
     async get_data( callback ) {
-        if ( this.data != null ) callback( this.data, this.width, this.height );
+        if ( this.data !== null ) callback( this.data, this.width, this.height );
         let result = await this.data_getter();
-        this.init_data( result.data, result.width, result.height );
+        // It's possible that this.data got filled while we were awating
+        if ( this.data === null ) {
+            this.init_data( result.data, result.width, result.height );
+        }
         callback( this.data, this.width, this.height );
     }
-    
+
     init_data( data, width, height ) {
-        if ( ( this.data == null ) || ( this.width == null ) || ( this.height == null ) ) {
+        if ( ( data == null ) || ( width == null ) || ( height == null ) ) {
             throw new Error( "ImViewImage: must have non-null data, width, and height." )
         }
-        // I am boggled AGAIN by javascript not having an integer datatype but making all numbers doubles
-        this.width = Math.floor( this.width );
-        this.height = Math.floor( this.height );
-        this.ndata = this.width * this.height;
 
-        if ( ( this.group.images.hasOwnProperty( this.name ) ) && ( ! this.replace ) )
-            throw new Error( "Error, group " + this.group.name + " already has an image with name " + this.name );
+        // I am boggled AGAIN by javascript not having an integer datatype but making all numbers doubles
+        this.width = Math.floor( width );
+        this.height = Math.floor( height );
+        this.ndata = this.width * this.height;
+        this.data = data;
 
         if ( this.zscale_samples === null ) this.zscale_samples = this.imview.zscale_samples;
         if ( this.zscale_contrast === null ) this.zscale_contrast = this.imview.zscale_contrast;
@@ -269,7 +269,7 @@ class ImView {
 
         this.groups = {};
         this._current_group = null;
-        this.add_group( { 'name': '_imview_root_group', make_current: true } );
+        this.add_group( { 'name': '_imview_root_group' }, true );
 
         this.define_css_classes();
         this.div = rkWebUtil.elemaker( "div", this.parent_div, { "id": this.imview_div_id,
@@ -334,7 +334,7 @@ class ImView {
                                                                    "size": 10 },
                                                    "change": function() { self.set_stretch_and_render(); },
                                                    "classes": [ this.css_classes.stretchinputwid ] } );
-            rkWebUtil.elemaker( "span", buttondiv, { "text": "  max:", "classes": [ 'bold' ] } );
+            rkWebUtil.elemaker( "span", this.stretchdiv, { "text": "  max:", "classes": [ 'bold' ] } );
             this.maxwidget = rkWebUtil.elemaker( "input", this.stretchdiv,
                                                  { "attributes": { "value": rkWebUtil.floatToString( this.max,
                                                                                                      { "nullok": true }
@@ -359,7 +359,7 @@ class ImView {
                                                           this.css_classes.hbox ] } );
         if ( this.zoom_buttons ) {
             let but = rkWebUtil.button( this.zoomdiv, "Reset Zoom", function() { self.reset_zoom(); } );
-            but = rkWebUtil.button( buttondiv, "Zoom Full", function() { self.zoom_full(); } );
+            but = rkWebUtil.button( this.zoomdiv, "Zoom Full", function() { self.zoom_full(); } );
             but.classList.add( this.css_classes.marginleftex );
             but = rkWebUtil.button( this.zoomdiv, "Zoom In", function() { self.zoom_in(); } );
             but.classList.add( this.css_classes.marginleftex );
@@ -403,10 +403,15 @@ class ImView {
         }
     }
 
+    // GAH.  I kinda messed this up.  the current_image getter returns
+    // an ImViewImage, but you set it with a string (the name ofthe
+    // image).  Oh well.
+
     get current_image()
     {
         if ( this._current_group === null ) return null;
-        return this.current_group.current_image;
+        let im = this.current_group.current_image;
+        return ( im === null ) ? null : this.current_group.images[ im ];
     }
 
     // This next one is scary, because images won't have unique names
@@ -428,8 +433,8 @@ class ImView {
 
         if ( ( this._current_group != group ) || ( this._current_group.current_image != image ) ) {
             this.groups[ group ].current_image = image;
-            this.current_group = this.groups[ group ];
-            this.iamge_change_callback( image, group );
+            this.current_group = group;
+            this.image_change_callback( image, group );
         }
     }
 
@@ -447,7 +452,7 @@ class ImView {
         }
         if ( make_current ) {
             if ( ( this._current_group === null ) || ( this._current_group.name != group.name ) ) {
-                this.current_group = this.groups[ group.name ];
+                this.current_group = group.name;
             }
         }
     }
@@ -459,7 +464,7 @@ class ImView {
         if ( ( ( this._current_group === null ) || ( this._current_group.current_image === null ) )
              && ( ! dont_make_current_if_no_current ) ) make_current=true;
         if ( make_current ) {
-            this.[groups][group].current_image = newimagename;
+            this.groups[group].current_image = newimagename;
             this.current_group = this.groups[ group ];
             this.render_image();
         }
@@ -481,25 +486,27 @@ class ImView {
     }
 
 
+    // Global variable that tracks whether we've inserted stuff
+    //   into the header.
     static _default_css_classes_defined = false;
 
     define_css_classes() {
-        let head = document.getElemntsByTagName( 'head' )[0];
+        let head = document.getElementsByTagName( 'head' )[0];
 
-        let defaultstyle = (cls, styles, elemtype="") => {
-            if ( this.css_classes[cls] === null ) {
-                if ( ! ImView._default_css_classes_defined ) {
-                    let elem = document.createElement( "style" );
-                    elem.type = "text/css";
-                    let text = elemtype + "." + "_imview_" + cls + " {\n";
-                    for ( let prop in styles ) {
-                        text += "  " + prop + ":" + styles[prop] + ";\n";
-                    }
-                    text += "}";
-                    elem.innerHTML = text;
-                    head.appendChild( elem );
+        let defaultstyle = (cls, styles, htmltag="") => {
+            if ( ! ImView._default_css_classes_defined ) {
+                let elem = document.createElement( "style" );
+                elem.type = "text/css";
+                let text = htmltag + "." + "_imview_" + cls + " {\n";
+                for ( let prop in styles ) {
+                    text += "  " + prop + ": " + styles[prop] + ";\n";
                 }
-                this.css_classes[style] = "_imview_" + cls;
+                text += "}";
+                elem.innerHTML = text;
+                head.appendChild( elem );
+            }
+            if ( this.css_classes[cls] === null ) {
+                this.css_classes[cls] = "_imview_" + cls;
             }
         }
 
@@ -514,9 +521,10 @@ class ImView {
                                   "border": "1px solid " + this.css_colors.full
                                 }, "div" );
         defaultstyle( "canvaswrapper", { "position": "relative",
+                                         "flex-grow": 1,
                                          "margin": 0,
                                          "padding": 0,
-                                         "border": 0 }, div );
+                                         "border": 0 }, "div" );
         defaultstyle( "canvas", { "position": "absolute",
                                   "left": 0,
                                   "top": 0,
@@ -535,11 +543,11 @@ class ImView {
                                "z-index":2,
                                "pointer-events": "none"
                              }, "svg" );
-        defaulttyle( "vbox", { "display": "flex",
-                               "flex-direction": "column",
-                               "min-width": 0,
-                               "min-height": 0
-                             }, "div" );
+        defaultstyle( "vbox", { "display": "flex",
+                                "flex-direction": "column",
+                                "min-width": 0,
+                                "min-height": 0
+                              }, "div" );
         defaultstyle( "hbox", { "display": "flex",
                                 "flex-directon": "row",
                                 "min-width": 0,
@@ -625,8 +633,8 @@ class ImView {
             throw new Error( "I don't understand ResizeObserver." );
         }
         let wid = wids[0];
-        this.dispwidth = wid.contentBoxSize[0].inlineSize;
-        this.dispheight = wid.contentBoxSize[0].blockSize;
+        this.dispwidth = Math.floor( wid.contentBoxSize[0].inlineSize );
+        this.dispheight = Math.floor( wid.contentBoxSize[0].blockSize );
         if ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight) ) {
             this.render_image();
         }
@@ -646,20 +654,28 @@ class ImView {
         }
 
         let image = this._current_group.current_image;
-        image.get_data().then( {data,width,height} => { self.actually_render_image() } );
+        image.get_data( (data, width, height) => { self.actually_render_image() } );
     }
 
     actually_render_image()
     {
+        let self = this;
+
         if ( ( this.dispwidth === null ) || ( this.dispheight === null ) ) {
             // I don't know how to do my stuff, so don't do it.
             return;
         }
-        if ( ( this._current_group == null ) || ( this._current_group._current_image == null ) ) {
+        if ( ( this.dispwidth == 0 ) || ( this.dispheight == 0) ) {
+            // Hurm.  I'm surprised this is happening, but then, ResizeObserver is mysterious.
+            return;
+        }
+        if ( ( this._current_group === null ) || ( this._current_group.current_image === null ) ) {
             // TODO render a default image
             return;
         }
-        
+
+        let image = this._current_group.current_image;
+
         if ( image.data === null ) {
             // TODO : option to render something default, or
             //   an error message on to the canvas.
@@ -703,7 +719,7 @@ class ImView {
             this.last_dispwidth = this.dispwidth;
             this.last_dispheight = this.dispheight;
 
-            this.canvas = rkWebUtil.elemaker( "canvas", this.canvas_div,
+            this.canvas = rkWebUtil.elemaker( "canvas", this.canvasdiv,
                                               { "attributes": { "width": this.dispwidth,
                                                                 "height": this.dispheight },
                                                 "classes": [ this.css_classes.canvas ] } );
@@ -720,7 +736,7 @@ class ImView {
             this.svg.setAttribute( "width", this.dispwidth );
             this.svg.setAttribute( "hieght", this.dispheight );
             this.svg.setAttribute( "id", this.svg_id );
-            this.canvas_div.appendChild( this.svg );
+            this.canvasdiv.appendChild( this.svg );
         }
         if ( ( image.x0 === null ) || ( this.canvas === null ) || ( this.svg === null ) )
             throw new Error( "This should never happen." );
@@ -730,13 +746,13 @@ class ImView {
             let tmp = image.min;
             image.min = image.max;
             image.max = tmp;
-            if ( this.stretch_widgets ) {
-                this.minwiget.value = min;
-                this.maxwidget.value = max;
-            }
+        }
+        if ( this.stretch_widgets ) {
+            this.minwidget.value = image.min;
+            this.maxwidget.value = image.max;
         }
 
-        let ctx = this.canvas.getCotnext( "2d", { 'alpha': false } );
+        let ctx = this.canvas.getContext( "2d", { 'alpha': false } );
         let imagedata = ctx.createImageData( this.dispwidth, this.dispheight );
 
         // Does javascript have vectorized stuff to make this faster?
@@ -745,7 +761,7 @@ class ImView {
         for( let dispy = 0 ; dispy < this.dispheight ; ++dispy ) {
             let off = dispy * this.dispwidth * 4;
             let imgy = Math.round( ( this.dispheight - dispy ) / image.scale + image.y0 );
-            let yoffedge = ( imgy < 0 ) || ( imgy >= img.height );
+            let yoffedge = ( imgy < 0 ) || ( imgy >= image.height );
             let lastimgx = -1e32;
             let bval = 0;
             for ( let dispx = 0 ; dispx < this.dispwidth ; ++dispx ) {
@@ -773,7 +789,7 @@ class ImView {
             }
         }
 
-        this.ctx.putImageData( imagedata, 0, 0 );
+        ctx.putImageData( imagedata, 0, 0 );
 
         // Make the overlay drawing svg, used both for square drawing and zooming
 

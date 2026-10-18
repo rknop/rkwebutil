@@ -852,9 +852,10 @@ rkWebUtil.paramParser = function( default_params, params, target, in_parser_para
     // Let's skip the opportunity for infinite recursion here
     Object.assign( parser_params, default_parser_params );
     Object.assign( parser_params, in_parser_params );
-    Object.assign( parser_params.recurse_params, default_parser_params.recurse_params );
-    if ( in_parser_params.hasOwnProperty( recurse_params ) )
+    if ( in_parser_params.hasOwnProperty( 'recurse_params' ) ) {
+        parser_params.recurse_params = {};
         Object.assign( parser_params.recurse_params, in_parser_params.recurse_params );
+    }
     if ( parser_params.recurse_params === null ) parser_params.recurse_params = parser_params;
 
     if ( parser_params.error_if_unknown || parser_params.alert_if_unknown || ( ! parser_params.assign_if_unknown ) ) {
