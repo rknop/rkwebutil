@@ -10,7 +10,8 @@ class ImViewGroup {
                          "y0": null,
                          "scale": null,
                          "min": null,
-                         "max": null
+                         "max": null,
+                         "info": {}
                        };
         rkWebUtil.paramParser( defaults, inparams, this );
         this.imview = imview;
@@ -40,7 +41,7 @@ class ImViewGroup {
 
     set current_image( name ) {
         if ( ! this.images.hasOwnProperty( name ) )
-            throw new Error( "Group doesn't have an image with name " + name );
+            throw new Error( "Group " + this.name + " doesn't have an image with name " + name );
         this._current_image = name;
     }
 
@@ -68,11 +69,12 @@ class ImViewGroup {
 class ImViewImage {
     constructor( imview, inparams={} )
     {
-        let defaults = { "data": null,
+        let defaults = { "name": null,
+                         "group": null,
+                         "data": null,
                          "width": null,
                          "height": null,
-                         "name": null,
-                         "group": null,
+                         "data_getter": null,
                          "start_with_group_zoom": true,
                          "start_with_group_stretch": false,
                          "zscale_samples": null,
@@ -83,18 +85,22 @@ class ImViewImage {
                          "min": null,
                          "max": null,
                          "replace": false,
-                         "boxsets": []
+                         "boxsets": [],
+                         "info": {}
                        };
-        rkWebUtil.paramParser( defaults, imparams, this );
-        this.imview = imview;
+        let tmp = {};
+        rkWebUtil.paramParser( defaults, imparams, tmp );
 
-        if ( ( this.data == null ) || ( this.width == null ) || ( this.height == null ) ) {
-            throw new Error( "ImViewImage: must have non-null data, width, and height." )
+        if ( this.data !== null ) {
+            if ( ( this.width === null ) || ( this.height === null ) )
+                throw Error( "Must pass width and height with data" );
+            this.init_data( data, width, height );
         }
-        // I am boggled AGAIN by javascript not having an integer datatype but making all numbers doubles
-        this.width = Math.floor( this.width );
-        this.height = Math.floor( this.height );
-        this.ndata = this.width * this.height;
+        else if ( this.data_getter === null ) {
+            throw Error( "Must either pass (image, width, height) or data_promise" );
+        }
+
+        this.imview = imview;
 
         if ( this.group == null ) this.group = this.imview.groups[ "_imview_root_group" ];
         else {
@@ -107,6 +113,23 @@ class ImViewImage {
             this.name = "imview-image-" + this.group.name + this.group.num_images.toString();
         }
         this.group.num_images += 1;
+    }
+
+    async get_data( callback ) {
+        if ( this.data != null ) callback( this.data, this.width, this.height );
+        let result = await this.data_getter();
+        this.init_data( result.data, result.width, result.height );
+        callback( this.data, this.width, this.height );
+    }
+    
+    init_data( data, width, height ) {
+        if ( ( this.data == null ) || ( this.width == null ) || ( this.height == null ) ) {
+            throw new Error( "ImViewImage: must have non-null data, width, and height." )
+        }
+        // I am boggled AGAIN by javascript not having an integer datatype but making all numbers doubles
+        this.width = Math.floor( this.width );
+        this.height = Math.floor( this.height );
+        this.ndata = this.width * this.height;
 
         if ( ( this.group.images.hasOwnProperty( this.name ) ) && ( ! this.replace ) )
             throw new Error( "Error, group " + this.group.name + " already has an image with name " + this.name );
@@ -188,7 +211,6 @@ class ImView {
         let hbox, vbox, but;
 
         let defaults = { "parent_div": null,
-                         "clickcallback": null,
                          "name": null,
                          "show_image_name": false,
                          "image_name_element": "h3",
@@ -206,6 +228,9 @@ class ImView {
                          "svg_id": "",
                          "zscale_samples": 10000,   // These are defaults that any image can override
                          "zscale_contrast": 0.25,
+                         "group_change_callback": null,
+                         "image_change_callback": null,
+                         "clickcallback": null,
                          "css_classes": {
                              "imview": null,
                              "canvaswrapper": null,
@@ -243,7 +268,7 @@ class ImView {
         ImView.numImViews += 1;
 
         this.groups = {};
-        this.current_group = null;
+        this._current_group = null;
         this.add_group( { 'name': '_imview_root_group', make_current: true } );
 
         this.define_css_classes();
@@ -360,6 +385,53 @@ class ImView {
             window.dispatchEvent( new Event( 'resize' ) );
     }
 
+    get current_group()
+    {
+        return this._current_group;
+    }
+
+    set current_group( name )
+    {
+        if ( ! this.groups.hasOwnProperty( name ) )
+            throw new Error( "Unknown group " + name );
+
+        if ( this._current_group != this.groups[ name ] ) {
+            this._current_group = this.groups[ name ];
+            this.render_image();
+            if ( this.group_change_callback !== null )
+                this.group_change_callback( name );
+        }
+    }
+
+    get current_image()
+    {
+        if ( this._current_group === null ) return null;
+        return this.current_group.current_image;
+    }
+
+    // This next one is scary, because images won't have unique names
+    //   globally, only within groups.  So, it takes
+    //   {group_name}:{image_name}, which won't work if {group_name} has
+    //   any colons in it.
+    set current_image( name_mess )
+    {
+        const name_regex = /^([^:]+):(.*)$/;
+        let match = name_mess.match( name_regex );
+        if ( match === null )
+            throw new Error( "Failed to parse group:image from \"" + name_mess + "\"" );
+        this.set_current_image( match[1], match[2] );
+    }
+
+    set_current_image( group, image ) {
+        if ( ! this.groups.hasOwnProperty( group ) )
+            throw new Error( "Unknown group " + group );
+
+        if ( ( this._current_group != group ) || ( this._current_group.current_image != image ) ) {
+            this.groups[ group ].current_image = image;
+            this.current_group = this.groups[ group ];
+            this.iamge_change_callback( image, group );
+        }
+    }
 
     add_group( params={}, make_current=false, exist_ok=true )
     {
@@ -374,9 +446,8 @@ class ImView {
             this.groups[ group.name ] = group;
         }
         if ( make_current ) {
-            if ( ( this.current_group === null ) || ( this.current_group.name != group.name ) ) {
+            if ( ( this._current_group === null ) || ( this._current_group.name != group.name ) ) {
                 this.current_group = this.groups[ group.name ];
-                this.render_image();
             }
         }
     }
@@ -385,14 +456,30 @@ class ImView {
     {
         if ( group === null ) group = '_imview_root_group';
         let newimagename = this.groups[ group ].add_image( params );
-        if ( ( ( this.current_group === null ) || ( this.current_group.current_image === null ) )
+        if ( ( ( this._current_group === null ) || ( this._current_group.current_image === null ) )
              && ( ! dont_make_current_if_no_current ) ) make_current=true;
         if ( make_current ) {
+            this.[groups][group].current_image = newimagename;
             this.current_group = this.groups[ group ];
-            this.current_group.current_image = newimagename;
             this.render_image();
         }
     }
+
+    select_group() {
+        let group = this.group_selector.value;
+        this.set_current_group( group );
+    }
+
+    select_image() {
+        let group = null;
+        if ( this.show_group_selector )
+            group = this.group_selector.value;
+        else
+            group = this.current_group;
+        let image = this.image_selector.value;
+        this.set_current_image( group, image );
+    }
+
 
     static _default_css_classes_defined = false;
 
@@ -545,16 +632,39 @@ class ImView {
         }
     }
 
-    render_image() {
+    render_image()
+    {
+        let self = this;
+
         if ( ( this.dispwidth === null ) || ( this.dispheight === null ) ) {
             // I don't know how to do my stuff, so don't do it.
             return;
         }
-        if ( ( this.current_group == null ) || ( this.current_group.current_image == null ) ) {
+        if ( ( this._current_group == null ) || ( this._current_group._current_image == null ) ) {
             // TODO render a default image
             return;
         }
-        let image = this.current_group.current_image;
+
+        let image = this._current_group.current_image;
+        image.get_data().then( {data,width,height} => { self.actually_render_image() } );
+    }
+
+    actually_render_image()
+    {
+        if ( ( this.dispwidth === null ) || ( this.dispheight === null ) ) {
+            // I don't know how to do my stuff, so don't do it.
+            return;
+        }
+        if ( ( this._current_group == null ) || ( this._current_group._current_image == null ) ) {
+            // TODO render a default image
+            return;
+        }
+        
+        if ( image.data === null ) {
+            // TODO : option to render something default, or
+            //   an error message on to the canvas.
+            throw Error( "image.data not available" )
+        }
 
         let svgns = "http://www.w3.org/2000/svg";
 
@@ -707,7 +817,7 @@ class ImView {
     }
 
     mousedown( evt ) {
-        if ( ( this.current_group == null ) || ( this.current_group.current_image == null ) ) {
+        if ( ( this._current_group == null ) || ( this._current_group.current_image == null ) ) {
             // TOOD THINK : when would this happen?
             return;
         }
@@ -773,11 +883,11 @@ class ImView {
             this.dragging = false;
         }
 
-        if ( ( this.current_group == null ) || ( this.current_group.current_image == null ) ) {
+        if ( ( this._current_group == null ) || ( this._current_group.current_image == null ) ) {
             // TOOD THINK : when would this happen?
             return;
         }
-        let image = this.current_group.current_image;
+        let image = this._current_group.current_image;
 
         let rect = evt.target.getBoundingClientRect();
         // ...it seems like there ought to be a simpler javasript thing that says
