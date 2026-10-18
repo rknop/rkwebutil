@@ -40,6 +40,7 @@ class ImViewGroup {
     }
 
     set current_image( name ) {
+        if ( name instanceof ImViewImage ) name = name.name;
         if ( ! this.images.hasOwnProperty( name ) )
             throw new Error( "Group " + this.name + " doesn't have an image with name " + name );
         this._current_image = name;
@@ -403,15 +404,10 @@ class ImView {
         }
     }
 
-    // GAH.  I kinda messed this up.  the current_image getter returns
-    // an ImViewImage, but you set it with a string (the name ofthe
-    // image).  Oh well.
-
     get current_image()
     {
         if ( this._current_group === null ) return null;
-        let im = this.current_group.current_image;
-        return ( im === null ) ? null : this.current_group.images[ im ];
+        return this.current_group.current_image;
     }
 
     // This next one is scary, because images won't have unique names
@@ -420,11 +416,18 @@ class ImView {
     //   any colons in it.
     set current_image( name_mess )
     {
-        const name_regex = /^([^:]+):(.*)$/;
-        let match = name_mess.match( name_regex );
-        if ( match === null )
-            throw new Error( "Failed to parse group:image from \"" + name_mess + "\"" );
-        this.set_current_image( match[1], match[2] );
+        if ( name instanceof ImViewImage ) {
+            if ( this.current_group === null )
+                throw Error( "Can't set image, no current group." );
+            this.set_current_image( this.current_group, name.name );
+        }
+        else {
+            const name_regex = /^([^:]+):(.*)$/;
+            let match = name_mess.match( name_regex );
+            if ( match === null )
+                throw new Error( "Failed to parse group:image from \"" + name_mess + "\"" );
+            this.set_current_image( match[1], match[2] );
+        }
     }
 
     set_current_image( group, image ) {
@@ -563,67 +566,74 @@ class ImView {
         ImView._default_css_classes_defined = true;
     }
 
-    change_stretch( min, max ) {
-        this.min = min;
-        this.max = max;
-        this.render_image();
-    }
-
-
     reset_stretch() {
-        this.min = this.init_min;
-        this.max = this.init_max;
+        let image = this.current_image;
+        if ( image === null ) return;
+        image.min = image.init_min;
+        image.max = image.init_max;
         this.render_image();
     }
 
 
     zscale_stretch() {
-        this.min = this.zmin;
-        this.max = this.zmax;
+        let image = this.current_image;
+        if ( image === null ) return;
+        image.min = image.zmin;
+        image.max = image.zmax;
         this.render_image();
     }
 
 
     reset_zoom() {
-        this.scale = this.init_scale;
-        this.x0 = this.init_x0;
-        this.y0 = this.init_y0;
+        let image = this.current_image;
+        if ( image === null ) return;
+        image.scale = image.init_scale;
+        image.x0 = image.init_x0;
+        image.y0 = image.init_y0;
         this.render_image();
     }
 
 
     zoom_full() {
-        if ( ( this.dispheight / this.height ) < ( this.dispwidth / this.width ) ) {
-            this.scale = this.dispheight / this.height;
+        let image = this.current_image;
+        if ( image === null ) return;
+        if ( ( this.dispheight / image.height ) < ( this.dispwidth / image.width ) ) {
+            image.scale = this.dispheight / image.height;
         }
         else {
-            this.scale = this.dispwidth / this.width;
+            image.scale = this.dispwidth / image.width;
         }
-        this.x0 = ( this.width / 2. ) - ( this.dispwidth / 2. / this.scale );
-        this.y0 = ( this.height / 2. ) - ( this.dispheight / 2. / this.scale );
+        image.x0 = ( image.width / 2. ) - ( this.dispwidth / 2. / image.scale );
+        image.y0 = ( image.height / 2. ) - ( this.dispheight / 2. / image.scale );
         this.render_image();
     }
 
 
     zoom_out() {
-        this.scale /= 2.;
-        this.x0 -= this.dispwidth / 4. / this.scale;
-        this.y0 -= this.dispheight / 4. / this.scale;
+        let image = this.current_image;
+        if ( image === null ) return;
+        image.scale /= 2.;
+        image.x0 -= this.dispwidth / 4. / image.scale;
+        image.y0 -= this.dispheight / 4. / image.scale;
         this.render_image();
     }
 
 
     zoom_in() {
-        this.x0 += this.dispwidth / 4. / this.scale;
-        this.y0 += this.dispheight / 4. / this.scale;
-        this.scale *= 2.;
+        let image = this.current_image;
+        if ( image === null ) return;
+        image.x0 += this.dispwidth / 4. / image.scale;
+        image.y0 += this.dispheight / 4. / image.scale;
+        image.scale *= 2.;
         this.render_image();
     }
 
 
     set_stretch_and_render() {
-        this.min = parseFloat( this.minwidget.value );
-        this.max = parseFloat( this.maxwidget.value );
+        let image = this.current_image;
+        if ( image === null ) return;
+        image.min = parseFloat( this.minwidget.value );
+        image.max = parseFloat( this.maxwidget.value );
         this.render_image();
     }
 
@@ -727,6 +737,7 @@ class ImView {
             this.canvas.style.height = this.dispheight.toString() + "px";
             this.canvas.addEventListener( "mousedown", (e) => { self.mousedown(e) } );
             this.canvas.addEventListener( "mouseup", (e) => { self.mouseup(e) } );
+            this.mousemovecallback = (e) => { self.mousemove(e) };
 
             this.svg = document.createElementNS( svgns, "svg" );
             this.svg.setAttributeNS( 'http://www.w3.org/2000/xmlns/', "xmlns", svgns );
@@ -875,6 +886,7 @@ class ImView {
         if ( this.zooming ) {
             if ( this.zoombox != null ) {
                 this.svg.removeChild( this.zoombox );
+                this.zoombox = null;
             }
             let ns = "http://www.w3.org/2000/svg";
             this.zoombox = document.createElementNS( ns, "rect" );
@@ -917,6 +929,7 @@ class ImView {
 
         if ( this.zooming ) {
             this.zooming = false;
+            this.zoombox = null;
             let imgx0 = this.initmousex / image.scale + image.x0;
             let imgy0 = ( this.dispheight - this.initmousey ) / image.scale + image.y0;
             let imgx1 = dispx / image.scale + image.x0;
