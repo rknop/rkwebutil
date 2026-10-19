@@ -2,6 +2,66 @@
 
 import { rkWebUtil } from "./rkwebutil.js"
 
+class ImViewRegionSet {
+
+    static nregionsets = 0;
+    static known_shapes = new Set( [ "box" ] );
+    static svgns = "http://www.w3.org/2000/svg";
+
+    constructor( inparams={} )
+    {
+        let defaults = { "name": null,
+                         "stroke": "#008000",
+                         "stroke-width": 2,
+                         "fill": "none",
+                         "shape": "box",
+                         "size": 5,
+                         "x": [],
+                         "y": [],
+                         "polys": null,
+                         "infos": null
+                       };
+        rkWebUtil.paramParser( defaults, inparams, this );
+        if ( ! ImViewRegionSet.known_shapes.has( this.shape ) ) {
+            this.x = [];
+            this.y = [];
+            throw new Error( "ImViewRegionSet: unknown shape " + this.shape );
+        }
+
+        if ( this.name === null ) {
+            this.name = "_imview_regionset-" + ImViewRegionSet.nregionsets;
+        }
+        ImViewRegionSet.nregionsets += 1;
+    }
+
+    stylenode() {
+        return document.createTextNode( "." + this.name + "-style { fill: " + this.fill +
+                                        "; stroke: " + this.stroke + "; stroke-width:" + this['stroke-width'] +
+                                        ";}" )
+    }
+
+    append_regions( svg, x0, y0, scale ) {
+        for ( let i in this.x ) {
+            let x = ( this.x[i] - x0 ) * this.scale;
+            let y = ( this.y[i] - y0 ) * this.scale;
+            let size = this.size * scale;
+            let poly = ( this.polys === null ) ? null : this.polys[i];
+            if ( this.shape == 'box' ) {
+                svg.append( rkWebUtil.elemaker( "rect", svg, { "svg": true,
+                                                               "classes": [ this.name + "-style" ],
+                                                               "attributes":
+                                                               { "x": x - size / 2.,
+                                                                 "y": y - size / 2.,
+                                                                 "width": size,
+                                                                 "height": size
+                                                               } } ) );
+            }
+        }
+    }
+
+}
+
+
 class ImViewGroup {
     constructor( imview, inparams={} )
     {
@@ -24,6 +84,7 @@ class ImViewGroup {
         this.zoom_source = null;
         this.scale_source = null;
         this._current_image = null;
+        this.regionsets = {};
     }
 
     get current_image() {
@@ -63,6 +124,27 @@ class ImViewGroup {
             throw new Error( "Error, group " + this.name + " doesn't have an image with name " + image.name );
         }
     }
+
+    add_regionset( params ) {
+        let regionset = new ImViewRegionSet( params );
+        if ( this.imview.regionsets.has( regionset.name ) )
+            throw new Error( "Imview already has a regionset named " + regionset.name );
+        this.imview.regionsets.add( regionset.name );
+        this.regionsets[ regionset.name ] = regionset;
+        return regionset.name;
+    }
+
+    remove_regionset( name, missing_ok=false ) {
+        if ( ! this.regionsets.hasOwnProperty( name ) ) {
+            if ( ! missing_ok ) {
+                throw new Error( "Uknown regionset " + name );
+            }
+        } else {
+            this.imveiw.regionset.delete( name );
+            delete this.regionsets( name );
+        }
+   }
+
 }
 
 
@@ -112,10 +194,15 @@ class ImViewImage {
             this.name = "imview-image-" + this.group.name + this.group.num_images.toString();
         }
         this.group.num_images += 1;
+
+        this.regionsets = {};
     }
 
     async get_data( callback ) {
-        if ( this.data !== null ) callback( this.data, this.width, this.height );
+        if ( this.data !== null ) {
+            callback( this.data, this.width, this.height );
+            return;
+        }
         let result = await this.data_getter();
         // It's possible that this.data got filled while we were awating
         if ( this.data === null ) {
@@ -165,6 +252,27 @@ class ImViewImage {
         this.y0 = this.init_y0;
         this.scale = this.init_scale;
     }
+
+    add_regionset( params ) {
+        let regionset = new ImViewRegionSet( params );
+        if ( this.imview.regionsets.has( regionset.name ) )
+            throw new Error( "Imview already has a regionset named " + regionset.name );
+        this.imview.regionsets.add( regionset.name );
+        this.regionsets[ regionset.name ] = regionset;
+        return regionset.name;
+    }
+
+    remove_regionset( name, missing_ok=false ) {
+        if ( ! this.regionsets.hasOwnProperty( name ) ) {
+            if ( ! missing_ok ) {
+                throw new Error( "Uknown regionset " + name );
+            }
+        } else {
+            this.imveiw.regionset.delete( name );
+            delete this.regionsets( name );
+        }
+   }
+
 }
 
 
@@ -265,12 +373,14 @@ class ImView {
         if ( this.name == null ) {
             this.name = "imview-" + ImView.numImViews.toString();
         }
+        this.show_group_selector = this.show_group_selector && this.show_image_selector;
         // If Javascript ever becomes not-single-threaded, we're screwed.  But I bet a lot of people are screwed.
         ImView.numImViews += 1;
 
         this.groups = {};
         this._current_group = null;
         this.add_group( { 'name': '_imview_root_group' }, true );
+        this.regionsets = new Set();
 
         this.define_css_classes();
         this.div = rkWebUtil.elemaker( "div", this.parent_div, { "id": this.imview_div_id,
@@ -296,8 +406,6 @@ class ImView {
                                                                    "classes": [ this.css_classes.bold ] });
                 this.image_selector = rkWebUtil.elemaker(
                     "select", this.image_name_div, { "change": (e) => { self.select_image() } } );
-                // Build the default image selector options
-                this.select_group();
             }
             else {
                 this.image_name_wid = rkWebUtil.elemaker( self.image_name_element, this.image_name_div,
@@ -393,51 +501,73 @@ class ImView {
 
     set current_group( name )
     {
-        if ( ! this.groups.hasOwnProperty( name ) )
-            throw new Error( "Unknown group " + name );
-
-        if ( this._current_group != this.groups[ name ] ) {
-            this._current_group = this.groups[ name ];
-            this.render_image();
-            if ( this.group_change_callback !== null )
-                this.group_change_callback( name );
-        }
+        this.set_current_image( name, null );
     }
 
     get current_image()
     {
         if ( this._current_group === null ) return null;
-        return this.current_group.current_image;
+        return this._current_group.current_image;
     }
 
     // This next one is scary, because images won't have unique names
-    //   globally, only within groups.  So, it takes
-    //   {group_name}:{image_name}, which won't work if {group_name} has
-    //   any colons in it.
+    //   globally, only within groups.  So, it looks for
+    //   {group_name}::{image_name}, setting the group and image, or,
+    //   if there are no colons, assumes the image is in the current
+    //   group.  This will break horribly if group names have
+    //   double colons in them.  (Double colons in image names
+    //   are OK because we make the group match lazy.)
     set current_image( name_mess )
     {
         if ( name instanceof ImViewImage ) {
             if ( this.current_group === null )
                 throw Error( "Can't set image, no current group." );
-            this.set_current_image( this.current_group, name.name );
+            this.set_current_image( this.current_group.name, name.name );
         }
         else {
-            const name_regex = /^([^:]+):(.*)$/;
+            const name_regex = /^(.+)?::(.+)$/;
             let match = name_mess.match( name_regex );
-            if ( match === null )
-                throw new Error( "Failed to parse group:image from \"" + name_mess + "\"" );
-            this.set_current_image( match[1], match[2] );
+            if ( match !== null ) {
+                this.set_current_image( match[1], match[2] );
+            }
+            else {
+                if ( this._current_group === null ) {
+                    throw new Error( "Failed to set new image, no current group" );
+                }
+                this.set_current_image( this._current_group.name, name_mess );
+            }
         }
     }
 
     set_current_image( group, image ) {
+        if ( group instanceof ImViewGroup ) group = group.name;
+        if ( image instanceof ImViewImage ) image = image.name;
+
         if ( ! this.groups.hasOwnProperty( group ) )
             throw new Error( "Unknown group " + group );
+        // We'll let the ImViewGroup current_image setter
+        //   yell if the image name isn't in the group.
 
-        if ( ( this._current_group != group ) || ( this._current_group.current_image != image ) ) {
-            this.groups[ group ].current_image = image;
-            this.current_group = group;
-            this.image_change_callback( image, group );
+        let oldgroup = this._current_group;
+        if ( ( oldgroup !== null ) && ( image === null ) ) {
+            image = oldgroup.current_image;
+            if ( image !== null ) image = image.name;
+        }
+
+        if ( ( oldgroup === null ) ||
+             ( oldgroup.name != group ) ||
+             ( oldgroup.current_image === null ) ||
+             ( oldgroup.current_image.name != image )
+           ) {
+            if ( image !== null )
+                this.groups[ group ].current_image = image;
+            if ( ( oldgroup === null) || ( oldgroup.name != group ) ) {
+                this._current_group = this.groups[ group ];
+                if ( this.group_change_callback !== null )
+                    this.group_change_callback( group );
+            }
+            if ( ( image !== null ) && ( this.image_change_callback !== null ) )
+                this.image_change_callback( image, group );
         }
     }
 
@@ -453,9 +583,18 @@ class ImView {
             group = new ImViewGroup( this, params )
             this.groups[ group.name ] = group;
         }
+
+        if ( this.show_group_selector ) {
+            rkWebUtil.elemaker( "option", this.group_selector, { "text": group.name,
+                                                                 "attributes": { "value": group.name } } );
+        }
+
         if ( make_current ) {
             if ( ( this._current_group === null ) || ( this._current_group.name != group.name ) ) {
                 this.current_group = group.name;
+            }
+            if ( this.show_group_selector ) {
+                this.group_selector.value = group.name;
             }
         }
     }
@@ -466,16 +605,26 @@ class ImView {
         let newimagename = this.groups[ group ].add_image( params );
         if ( ( ( this._current_group === null ) || ( this._current_group.current_image === null ) )
              && ( ! dont_make_current_if_no_current ) ) make_current=true;
+
+        if ( this.show_image_selector ) {
+            rkWebUtil.elemaker( "option", this.image_selector, { "text": newimagename,
+                                                                 "attributes": { "value": newimagename } } );
+        }
+
         if ( make_current ) {
             this.groups[group].current_image = newimagename;
             this.current_group = this.groups[ group ];
             this.render_image();
+            if ( this.show_image_selector )
+                this.image_selector.value = newimagename;
         }
     }
 
     select_group() {
         let group = this.group_selector.value;
-        this.set_current_group( group );
+        if ( ( this._current_group === null ) || ( group != this._current_group.name ) ) {
+            this.current_group = group;
+        }
     }
 
     select_image() {
@@ -483,9 +632,10 @@ class ImView {
         if ( this.show_group_selector )
             group = this.group_selector.value;
         else
-            group = this.current_group;
+            group = this.current_group.name;
         let image = this.image_selector.value;
         this.set_current_image( group, image );
+        this.render_image();
     }
 
 
@@ -646,11 +796,11 @@ class ImView {
         this.dispwidth = Math.floor( wid.contentBoxSize[0].inlineSize );
         this.dispheight = Math.floor( wid.contentBoxSize[0].blockSize );
         if ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight) ) {
-            this.render_image();
+            this.render_image( true );
         }
     }
 
-    render_image()
+    render_image( only_if_resized=false )
     {
         let self = this;
 
@@ -664,10 +814,10 @@ class ImView {
         }
 
         let image = this._current_group.current_image;
-        image.get_data( (data, width, height) => { self.actually_render_image() } );
+        image.get_data( (data, width, height) => { self.actually_render_image( only_if_resized ) } );
     }
 
-    actually_render_image()
+    actually_render_image( only_if_resized=false )
     {
         let self = this;
 
@@ -694,9 +844,9 @@ class ImView {
 
         let svgns = "http://www.w3.org/2000/svg";
 
-        // This if block will always trigger at least once because we set this.last_disp* = null in
-        //   the constructor, and the if above ensures this.disp* is not null
-        if ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight ) ) {
+        if ( ( ! only_if_resized ) ||
+             ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight ) )
+           ) {
             rkWebUtil.wipeDiv( this.canvasdiv );
             if ( ( image.x0 === null ) || ( this.last_dispwidth === null ) ) {
                 image.scale = ( ( ( this.dispheight / image.height ) < ( this.dispwidth / image.width ) )
@@ -810,25 +960,22 @@ class ImView {
         this.svg.appendChild( svgstyle );
         svgstyle.appendChild( document.createTextNode( ".zoombox-" + this.name +
                                                        " { fill: none; stroke: #008800; stroke-width: 2; }" ) );
-        // Draw all squares
-        for ( let i in image.boxsets ) {
-            let boxes = image.boxsets[ i ];
-            let style = "svgbox-" + this.name + "-" + i.toString();
-            svgstyle.appendChild( document.createTextNode( "." + style +
-                                                           " { fill: none; stroke: " + boxes.color + "; " +
-                                                           "stroke-width: 2; }" ) );
-            for ( let square of boxes.boxes ) {
-                let rect = document.createElementNS( ns, "rect" );
-                let dispx = ( square.x - image.x0 ) * image.scale;
-                let dispy = image.dispheight - ( square.y - image.y0 ) * image.scale;
-                let dispwid = square.width * image.scale;
-                square.svgobj = document.createElementNS( ns, "rect" );
-                square.svgobj.setAttribute( "x", dispx - dispwid / 2. );
-                square.svgobj.setAttribute( "y", dispy - dispwid / 2. );
-                square.svgobj.setAttribute( "width", dispwid );
-                square.svgobj.setAttribute( "height", dispwid );
-                square.svgobj.setAttribute( "class", color );
-                this.svg.appendChild( square.svgobj );
+
+        // Draw regions
+
+        if ( this.current_image !== null ) {
+            let x0 = this.current_image.x0;
+            let y0 = this.current_image.y0;
+            let scale = this.current_image.scale;
+            if ( this.current_group !== null ) {
+                for ( let rset of Object.values( this.current_group.regionsets ) ) {
+                    svgstyle.appendChild( rset.stylenode() );
+                    rset.append_regions( this.svg, x0, y0, scale );
+                }
+            }
+            for ( let rset of Object.values( this.current_image.regionsets ) ) {
+                svgstyle.appendChild( rset.stylenode() );
+                rset.append_regions( this.svg, x0, y0, scale );
             }
         }
     }
@@ -1260,4 +1407,4 @@ class ImView {
 
 // **********************************************************************
 
-export { ImView, ImViewImage, ImViewGroup }
+export { ImView, ImViewImage, ImViewGroup, ImViewRegionSet }
