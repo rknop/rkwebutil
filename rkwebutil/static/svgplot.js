@@ -1471,29 +1471,33 @@ SVGPlot.Plot.prototype.click = function( event )
         }
     }
 
-    // console.log( "Closest point is point " + minpointdex + " of dataset " + minsetdex + " at " +
-    //              this.datasets[minsetdex]._x[minpointdex] + " , " + this.datasets[minsetdex]._y[minpointdex] );
+    if ( minpointdex !== null ) {
+        this.highlight( minsetdex, minpointdex );
 
-    // let svgx = ( closex - this._minx ) * this.plotwidth / ( this._maxx - this._minx ) + this.leftedge;
-    // let svgy = ( this._maxy - closey ) * this.plotheight / (this._maxy - this._miny ) + this.topedge;
-    let svgpt = this.dataToSVG( closex, closey );
+        for ( let listener of this.clicklisteners ) {
+            listener( { "setdex": minsetdex,
+                        "pointdex": minpointdex,
+                        "dataset": this.datasets[minsetdex],
+                        "pointname": this.datasets[minsetdex]._pointnames[minpointdex],
+                        "pointdata": ( ( this.datasets[minsetdex]._pointdata !== null )
+                                       ? this.datasets[minsetdex]._pointdata[minpointdex] : null ),
+                        "x": closex,
+                        "y": closey } );
+        }
+    }
+}
 
+SVGPlot.Plot.prototype.highlight = function( setdex, pointdex )
+{
     if ( this.highlighter != null ) {
         this.highlighter.remove();
         this.highlighter = null;
     }
-    this.highlighter = this.datasets[minsetdex].highlightSquare( svgpt.x, svgpt.y );
-    this.svg.appendChild( this.highlighter );
-
-    for ( let listener of this.clicklisteners ) {
-        listener( { "setdex": minsetdex,
-                    "pointdex": minpointdex,
-                    "dataset": this.datasets[minsetdex],
-                    "pointname": this.datasets[minsetdex]._pointnames[minpointdex],
-                    "pointdata": ( ( this.datasets[minsetdex]._pointdata !== null )
-                                   ? this.datasets[minsetdex]._pointdata[minpointdex] : null ),
-                    "x": closex,
-                    "y": closey } );
+    if ( pointdex != null ) {
+        let svgpt = this.dataToSVG( this.datasets[ setdex ]._x[ pointdex ],
+                                    this.datasets[ setdex ]._y[ pointdex ] );
+        this.highlighter = this.datasets[setdex].highlightSquare( svgpt.x, svgpt.y );
+        this.svg.appendChild( this.highlighter );
     }
 }
 

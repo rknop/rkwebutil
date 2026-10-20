@@ -24,76 +24,86 @@ rkWebUtil.wipeDiv = function( div )
 
 rkWebUtil.elemaker = function( elemtype, parent, inprops={} )
 {
-    var props = { id: null,
-                  text: null,
-                  dblclick: null,
-                  click: null,
-                  change:null,
-                  classes: null,
-                  attributes: null,
-                  svg: false };
-    let given_inprops = new Set( Object.getOwnPropertyNames( inprops ) );
-    let known_props = new Set( Object.getOwnPropertyNames( props ) );
-    let diff_props = given_inprops.difference( known_props );
-    if ( diff_props.size > 0 ) {
-        window.alert( "Error, unknown properties given to elemaker: " + Array.from(diff_props).join(', ') );
-        return;
+    var default_props = { id: null,
+                          text: null,
+                          dblclick: null,
+                          click: null,
+                          change:null,
+                          classes: null,
+                          attributes: null,
+                          style: null,
+                          svg: false };
+    let props = {};
+    if ( typeof inprops === 'string' ) {
+        Object.assign( props, inprops );
+        props.text = inprops;
+    } else {
+        rkWebUtil.paramParser( default_props, inprops, props,
+                               { "alert_prefix": "Unknown parameters passed to elemaker: " } );
     }
 
-    Object.assign( props, inprops );
-    var id = props.id;
-    var text = props.text;
-    var click = props.click;
-    var dblclick = props.dblclick;
-    var change = props.change;
-    var classes = props.classes;
-    var attributes = props.attributes;
-
-    var attr;
-
-    var elem;
+    let elem = null;
 
     if ( elemtype == "text" ) {
+        let badprops = [];
+        for ( let field in props ) {
+            if ( field == "text" ) {
+                continue
+            }
+            else if ( field == 'svg' ) {
+                if ( props.svg ) throw new Error( "Can't make text nodes with svg." );
+            }
+            else if ( props[field] != null ) {
+                badprops.push( field );
+            }
+        }
+        if ( badprops.length > 0 )
+            throw new Error( "Can't set anything other than text for text nodes; " +
+                             "you set " + badprops.toString() + ".  Use a span." );
         if ( props.text == null )
-            throw "Must pass text in props to make a text node.";
-        if ( props.svg )
-            throw "Can't make text nodes with svg.";
-        if ( classes != null )
-            throw "Can't assign classes to text nodes (use a span).";
-        if ( click != null || change != null )
-            throw "Can't add events to text nodes (use a span)."
-        if ( attributes != null )
-            throw "Can't set attributes of text nodes (use a span).";
+            throw new Error( "Must pass text in inprops to make a text node." );
 
         elem = document.createTextNode( props.text );
         if ( parent != null ) parent.appendChild( elem );
         return elem;
     }
 
-    if ( props.svg )
+    if ( props.svg || ( elemtype == "svg" ) ) {
         elem = document.createElementNS( "http://www.w3.org/2000/svg", elemtype );
-    else
+        if ( elemtype == "svg" ) elem.setAttributeNS( "http://www.w3.org/2000/xmlns/", "xmlns",
+                                                      "http://www.w3.org/2000/svg" );
+    }
+    else {
         elem = document.createElement( elemtype );
+    }
 
     if ( parent != null) parent.appendChild( elem );
+    if ( props.id != null ) elem.setAttribute( 'id', props.id );
     if ( props.text != null ) elem.appendChild( document.createTextNode( props.text ) );
 
-    if ( click != null )
-        elem.addEventListener( "click", click );
-    if ( dblclick != null )
-        elem.addEventListener( "dblclick", dblclick );
-    if ( change != null )
-        elem.addEventListener( "change", change );
-    if ( classes != null ) {
-        for ( let classname of classes ) {
+    for ( let eventname of [ "click", "dblclick", "change" ] ) {
+        if ( props[eventname] != null )
+            elem.addEventListener( eventname, props[eventname] );
+    }
+
+    if ( props.classes != null ) {
+        for ( let classname of props.classes ) {
             elem.classList.add( classname )
         }
     }
-    if ( id != null ) elem.setAttribute( 'id', id );
-    if ( attributes != null ) {
-        for ( attr in attributes ) {
-            if ( attributes.hasOwnProperty( attr ) ) {
-                elem.setAttribute( attr, attributes[attr] );
+
+    if ( props.attributes != null ) {
+        for ( let attr in props.attributes ) {
+            if ( props.attributes.hasOwnProperty( attr ) ) {
+                elem.setAttribute( attr, props.attributes[attr] );
+            }
+        }
+    }
+
+    if ( props.style != null ) {
+        for ( let sty in props.style ) {
+            if ( props.style.hasOwnProperty( sty ) ) {
+                elem.style[sty] = props.style[sty];
             }
         }
     }
@@ -842,7 +852,7 @@ rkWebUtil.paramParser = function( default_params, params, target, in_parser_para
 {
     let default_parser_params = { 'error_if_unknown': true,
                                   'alert_if_unknown': true,
-                                  'alert_prefix': "",
+                                  'alert_prefix': "Unknown parameters: ",
                                   'assign_if_unknown': false,
                                   'assign_only_known': true,
                                   'recurse': false,
@@ -862,7 +872,7 @@ rkWebUtil.paramParser = function( default_params, params, target, in_parser_para
         let unknown = [];
         for ( let kw in params ) if ( ! default_params.hasOwnProperty(kw) ) unknown.push( kw );
         if ( unknown.length > 0 ) {
-            let errmsg = parser_params.alert_prefix + "Unknown parameters: " + unknown.toString();
+            let errmsg = parser_params.alert_prefix + unknown.toString();
             if ( parser_params.alert_if_unknown ) window.alert( errmsg );
             if ( parser_params.error_if_unknown ) throw new Error( errmsg );
             if ( ! assign_if_unknown ) return;
