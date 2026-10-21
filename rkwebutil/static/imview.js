@@ -1,4 +1,5 @@
-// TODO : getter and setter for current group and current image that will update widgets and redraw and shit
+// One thing I'm sad about is that redraw gets called too often -- or, really, that the
+//   canvas and svg overlays are done more often than they need to be.  Look into this.
 
 import { rkWebUtil } from "./rkwebutil.js"
 
@@ -222,13 +223,27 @@ class ImViewImage {
         this.regionsets = {};
     }
 
-    async get_data( callback ) {
+    async get_data( callback, errcallback=null )
+    {
         if ( this.data !== null ) {
             callback( this.data, this.width, this.height );
             return;
         }
-        let result = await this.data_getter();
-        // It's possible that this.data got filled while we were awating
+
+        var result = null;
+        try {
+            result = await this.data_getter();
+        } catch (error) {
+            if ( errcallback != null ) errcallback(error);
+            else {
+                if ( imview.alert_on_get_data_failure )
+                    window.alert( "ImView failed to get image data: " + error.toString() );
+                else
+                    console.log( "ImView failed to get image data: " + error.toString() )
+            }
+            return;
+        }
+        // It's possible that this.data got filled while we were awaiting
         if ( this.data === null ) {
             this.init_data( result.data, result.width, result.height );
         }
@@ -372,6 +387,7 @@ class ImView {
                          "group_change_callback": null,
                          "image_change_callback": null,
                          "clickcallback": null,
+                         "alert_on_get_data_failure": true,
                          "css_classes": {
                              "imview": null,
                              "canvaswrapper": null,
@@ -513,6 +529,8 @@ class ImView {
         //   (They will end up getting referenced in set_current_image)
         this.add_group( { 'name': '_imview_root_group', 'displayname': '<Root>' }, true );
 
+        this._message = null;
+        this._message_classes = new Set();
         this.dispwidth = null;
         this.dispheight = null;
         this.last_dispwidth = null;
@@ -525,6 +543,41 @@ class ImView {
         //   is not null, we appendChilded above before we had created this resize observer.
         if ( this.parent_div !== null )
             window.dispatchEvent( new Event( 'resize' ) );
+    }
+
+    get message()
+    {
+        return this._message;
+    }
+
+    set message( val )
+    {
+        set_message( val, this._message_classes );
+    }
+
+    set_message( val, classes )
+    {
+        let must_redraw = false;
+
+        if ( ( classes != null ) && ( ! ( classes instanceof Set )) ) {
+            if ( Array.isArray( classes ) ) classes = new Set( classes );
+            else classes = new Set( [ classes ] );
+        }
+
+        if ( this._message != val )
+            must_redraw = true;
+        else if ( ( classes == null ) != ( this._message_classes == null ) )
+            must_redraw = true;
+        else if ( classes != null ) {
+            must_redraw = ( ( classes.size != this._message_classes.size ) ||
+                            ( ! classes.isSubsetOf( this._message_classes ) ) );
+        }
+
+        if ( must_redraw ) {
+            this._message = val;
+            this._message_classes = classes;
+            this.render_image();
+        }
     }
 
     get current_group()
@@ -713,7 +766,7 @@ class ImView {
         let group = this.group_selector.value;
         if ( ( this._current_group === null ) || ( group != this._current_group.name ) ) {
             this.current_group = group;
-            this.render_image_and_regions();
+            this.render_image();
         }
     }
 
@@ -725,7 +778,7 @@ class ImView {
             group = this.current_group.name;
         let image = this.image_selector.value;
         this.set_current_image( group, image );
-        this.render_image_and_regions();
+        this.render_image();
     }
 
 
@@ -797,6 +850,7 @@ class ImView {
                                 "min-height": 0
                               }, "div" );
         defaultstyle( "bold", { "font-weight": "bold" } );
+        defaultstyle( "italic", { "font-style": "italic" } );
         defaultstyle( "justifyleft",  { "justify-content": "flex-start" } );
         defaultstyle( "justifycenter", { "justify-content": "center" } );
         defaultstyle( "zoominputwid", { "border-style": "outset", "border-color": this.css_colors.mostlyfull } );
@@ -836,7 +890,7 @@ class ImView {
         if ( image === null ) return;
         image.min = image.init_min;
         image.max = image.init_max;
-        this.render_image_and_regions();
+        this.render_image();
     }
 
 
@@ -845,7 +899,7 @@ class ImView {
         if ( image === null ) return;
         image.min = image.zmin;
         image.max = image.zmax;
-        this.render_image_and_regions();
+        this.render_image();
     }
 
 
@@ -855,7 +909,7 @@ class ImView {
         image.scale = image.init_scale;
         image.x0 = image.init_x0;
         image.y0 = image.init_y0;
-        this.render_image_and_regions();
+        this.render_image();
     }
 
 
@@ -870,7 +924,7 @@ class ImView {
         }
         image.x0 = ( image.width / 2. ) - ( this.dispwidth / 2. / image.scale );
         image.y0 = ( image.height / 2. ) - ( this.dispheight / 2. / image.scale );
-        this.render_image_and_regions();
+        this.render_image();
     }
 
 
@@ -880,7 +934,7 @@ class ImView {
         image.scale /= 2.;
         image.x0 -= this.dispwidth / 4. / image.scale;
         image.y0 -= this.dispheight / 4. / image.scale;
-        this.render_image_and_regions();
+        this.render_image();
     }
 
 
@@ -890,7 +944,7 @@ class ImView {
         image.x0 += this.dispwidth / 4. / image.scale;
         image.y0 += this.dispheight / 4. / image.scale;
         image.scale *= 2.;
-        this.render_image_and_regions();
+        this.render_image();
     }
 
 
@@ -899,7 +953,7 @@ class ImView {
         if ( image === null ) return;
         image.min = parseFloat( this.minwidget.value );
         image.max = parseFloat( this.maxwidget.value );
-        this.render_image_and_regions();
+        this.render_image();
     }
 
     resized( wids ) {
@@ -911,44 +965,120 @@ class ImView {
         this.dispwidth = Math.floor( wid.contentBoxSize[0].inlineSize );
         this.dispheight = Math.floor( wid.contentBoxSize[0].blockSize );
         if ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight) ) {
-            this.render_image_and_regions( true );
+            this.render_image();
         }
     }
 
-    render_image_and_regions( only_if_resized=false )
-    {
-        this.render_image( only_if_resized, true );
+    blank_canvas() {
+        let ctx = this.canvas.getContext( "2d" );
+        ctx.fillStyle = rkWebUtil.backgroundColor( this.canvasdiv );
+        ctx.fillRect( 0, 0, this.canvas.width, this.canvas.height );
     }
 
-    render_image( only_if_resized=false, render_regions=false )
+    render_message_to_svg( message, classes ) {
+        this.blank_canvas();
+        rkWebUtil.wipeDiv( this.svg );
+        let em = parseFloat( window.getComputedStyle( document.documentElement ).fontSize );
+        rkWebUtil.elemaker( "text", this.svg, { 'svg': true,
+                                                'text': message,
+                                                'classes': classes,
+                                                'attributes': {
+                                                    'x': 3 * em,
+                                                    'y': 3 * em,
+                                                    'dominant-baseline': 'hanging'
+                                                } } );
+    }
+
+    render_image( render_regions=true )
     {
         let self = this;
+        let message = this._message;
+        let message_classes = Array.from( this._message_classes );
 
         if ( ( this.dispwidth === null ) || ( this.dispheight === null ) ) {
             // I don't know how to do my stuff, so don't do it.
             return;
         }
         if ( ( this._current_group == null ) || ( this._current_group._current_image == null ) ) {
-            // TODO render a default image
+            if ( message == null ) {
+                message = "No current image";
+                message_classes = [ "bold", "italic" ];
+            }
+        }
+
+        let resized = ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight );
+        if ( resized || ( this.canvas == null ) || ( this.svg == null ) )
+            this.make_canvas_and_svg();
+
+        if ( this.canvas == null ) {
+            // It's hopeless.  Probably zero size or something.
             return;
         }
 
-        let image = this._current_group.current_image;
-        image.get_data( (data, width, height) => { self.actually_render_image( only_if_resized, render_regions ) } );
+        this.blank_canvas();
+        if ( message != null ) {
+            this.render_message_to_svg( message, Array.from( message_classes ) );
+        }
+        else {
+            this.render_message_to_svg( "Loading image...", [ "bold", "italic" ] );
+            let image = this._current_group.current_image;
+            image.get_data(
+                (data, width, height) =>
+                { self.actually_render_image( render_regions ) },
+                (error) => {
+                    console.log( "Error loading image: " + error.toString() );
+                    self.render_message_to_svg( "Error loading image.", [ "bold", "italic" ] );
+                } );
+        }
     }
 
-    render_regions( only_if_resized=false )
+    render_regions()
     {
         if ( this.svg === null ) return;
         let self = this;
         let image = this._current_group.current_image;
-        image.get_data( (data, width, height) => { self.actually_render_regions( only_if_resized ) } );
+        image.get_data( (data, width, height) => { self.actually_render_regions() } );
     }
 
-    // only_if_resized is deceptively named
-    //    It will always render the image.
-    //    If only_if_resized is true, *or* if the canvas was resized, the canvas and svg will be remade.
-    actually_render_image( only_if_resized=false, render_regions=false )
+
+    make_canvas_and_svg() {
+        if ( ( this.dispwidth == 0 ) || ( this.dispheight == 0) ||
+             ( isNaN(this.dispwidth) ) || ( isNaN(this.dispheight) ) ) {
+            // Hurm.  I'm surprised this is happening, but then, ResizeObserver is mysterious.
+            return;
+        }
+        rkWebUtil.wipeDiv( this.canvasdiv );
+        this.canvas = rkWebUtil.elemaker( "canvas", this.canvasdiv,
+                                          { "classes": [ this.css_classes.canvas ],
+                                            "attributes": {
+                                                "width": this.dispwidth,
+                                                "height": this.dispheight
+                                            },
+                                            "style": {
+                                                "width": this.dispwidth.toString() + "px",
+                                                "height": this.dispheight.toString() + "px"
+                                            }
+                                          }
+                                        );
+
+        this.svg = rkWebUtil.elemaker( "svg", this.canvasdiv,
+                                       { "svg": true,
+                                         "id": this.svg_id,
+                                         "classes": [ this.css_classes.svg ],
+                                         "attributes": {
+                                             "width": this.dispwidth,
+                                             "height": this.dispheight
+                                         },
+                                         "style": {
+                                             "width": this.dispwidth.toString() + "px",
+                                             "height": this.dispheight.toString() + "px"
+                                         }
+                                       }
+                                     );
+    }
+
+
+    actually_render_image( render_regions=true )
     {
         let self = this;
 
@@ -975,14 +1105,26 @@ class ImView {
         }
 
         let resized = ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight );
+        if ( resized || ( this.canvas == null ) || ( this.svg == null ) ) {
+            this.make_canvas_and_svg();
+        } else {
+            this.blank_canvas();
+            this.svg_init();
+        }
 
-        if ( ( ! only_if_resized ) || resized ) {
-            rkWebUtil.wipeDiv( this.canvasdiv );
-            if ( ( image.x0 === null ) || ( this.last_dispwidth === null ) ) {
-                image.scale = ( ( ( this.dispheight / image.height ) < ( this.dispwidth / image.width ) )
-                                ? this.dispheight / image.height : this.dispwidth / image.width );
-                image.x0 = ( image.width / 2. ) - ( this.dispwidth / 2. / image.scale );
-                image.y0 = ( image.height / 2. ) - ( this.dispheight / 2. / image.scale );
+        let imginit = (image, self) => {
+            image.scale = ( ( ( self.dispheight / image.height ) < ( self.dispwidth / image.width ) )
+                            ? self.dispheight / image.height : self.dispwidth / image.width );
+            image.x0 = ( image.width / 2. ) - ( self.dispwidth / 2. / image.scale );
+            image.y0 = ( image.height / 2. ) - ( self.dispheight / 2. / image.scale );
+        };
+
+        if ( image.x0 == null ) {
+            imginit( image, this );
+        }
+        else if ( resized ) {
+            if ( this.last_dispwidth === null ) {
+                imginit( image, this );
             }
             else {
                 // Set the new scale so that the same amount of stuff will be displayed on whichever
@@ -1008,35 +1150,13 @@ class ImView {
             if ( image.init_y0 === null ) image.init_y0 = image.y0;
             this.last_dispwidth = this.dispwidth;
             this.last_dispheight = this.dispheight;
+        }
 
-            this.canvas = rkWebUtil.elemaker( "canvas", this.canvasdiv,
-                                              { "attributes": { "width": this.dispwidth,
-                                                                "height": this.dispheight },
-                                                "classes": [ this.css_classes.canvas ] } );
-            this.canvas.style.width = this.dispwidth.toString() + "px";
-            this.canvas.style.height = this.dispheight.toString() + "px";
+        if ( ! this.canvas.hasAttribute( 'data-imview-listeners' ) ) {
             this.canvas.addEventListener( "mousedown", (e) => { self.mousedown(e) } );
             this.canvas.addEventListener( "mouseup", (e) => { self.mouseup(e) } );
             this.mousemovecallback = (e) => { self.mousemove(e) };
-
-            // Make the overlay drawing svg, used both for square drawing and zooming
-
-            this.svg = rkWebUtil.elemaker( "svg", this.canvasdiv,
-                                           { "svg": true,
-                                             "id": this.svg_id,
-                                             "classes": [ this.css_classes.svg ],
-                                             "attributes": {
-                                                 "width": this.dispwidth,
-                                                 "height": this.dispheight
-                                             },
-                                             "style": {
-                                                 "width": this.dispwidth.toString() + "px",
-                                                 "height": this.dispheight.toString() + "px"
-                                             }
-                                           }
-                                         );
-            // Don't need to do this since we call this.actually_render_regions with wipe=true below.
-            // this.svg_init();
+            this.canvas.setAttribute( 'data-imview-listeners', 1 );
         }
 
         if ( ( image.x0 === null ) || ( this.canvas === null ) || ( this.svg === null ) )
@@ -1245,7 +1365,7 @@ class ImView {
             }
             image.x0 = ctrx - this.dispwidth / 2. / image.scale;
             image.y0 = ctry - this.dispheight / 2. / image.scale;
-            this.render_image_and_regions();
+            this.render_image();
         }
         else {
             let imgx = dispx / image.scale + image.x0;
@@ -1268,7 +1388,7 @@ class ImView {
             if ( ( ( evt.button == 0 ) && ( evt.shiftKey ) ) || ( evt.button == 1 ) ) {
                 image.x0 = iimgx - this.dispwidth / 2. / image.scale;
                 image.y0 = iimgy - this.dispheight / 2. / image.scale;
-                this.render_image_and_regions();
+                this.render_image();
             }
 
             // External callback

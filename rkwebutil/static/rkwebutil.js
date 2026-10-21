@@ -44,18 +44,13 @@ rkWebUtil.elemaker = function( elemtype, parent, inprops={} )
 
     let elem = null;
 
-    if ( elemtype == "text" ) {
+    // Special case handling for elemtype "text".  For SVG, it's a regular element,
+    //   but for HTML we just make a text node instead of an element.
+    if ( ( elemtype == "text" ) && ( ! props.svg ) ) {
         let badprops = [];
-        for ( let field in props ) {
-            if ( field == "text" ) {
-                continue
-            }
-            else if ( field == 'svg' ) {
-                if ( props.svg ) throw new Error( "Can't make text nodes with svg." );
-            }
-            else if ( props[field] != null ) {
+        for ( let field of Object.keys(props) ) {
+            if ( ( field != "text" ) && ( field != "svg" ) && ( props[field] != null ) )
                 badprops.push( field );
-            }
         }
         if ( badprops.length > 0 )
             throw new Error( "Can't set anything other than text for text nodes; " +
@@ -126,10 +121,10 @@ rkWebUtil.button = function( parent, title, callback, classes=null, attributes=n
     }
     if ( classes != null ) {
         for ( let classname of classes ) {
-            elem.classList.add( classname );
+            button.classList.add( classname );
         }
     }
-    button.addEventListener( "click", callback );
+    if ( callback != null ) button.addEventListener( "click", callback );
     if ( parent != null ) parent.appendChild( button );
     return button;
 }
@@ -173,6 +168,36 @@ rkWebUtil.popupMenu = function( items, callbacks, classes, title=null, titleclas
     menu.addEventListener( "mouseleave", function() { menu.style.visibility = "hidden"; } );
 
     return menu;
+}
+
+
+// **********************************************************************
+// A utility for finding the actual background color
+// Sadly, I think this is browser dependent
+
+rkWebUtil.backgroundColor = function( elem ) {
+    const rgba_re = /rgba\( *[0-9]+ *, *[0-9]+ *, *[0-9]+ *, *([0-9]+) *\)/
+    var bgcolor = null;
+    while ( elem && ( bgcolor == null ) ) {
+        let elembgcolor = window.getComputedStyle( elem ).backgroundColor;
+        if ( elembgcolor == "transparent" ) {
+            elem = elem.parentElement;
+        }
+        else {
+            let mat = rgba_re.exec( elembgcolor )
+            if ( ( mat != null ) && ( parseFloat(mat[1]) == 0 ) ) {
+                elem = elem.parentElement;
+            }
+            else {
+                bgcolor = elembgcolor;
+            }
+        }
+    }
+    if ( bgcolor == null ) {
+        // What should we do?
+        bgcolor = "rgb(255, 255, 255)";
+    }
+    return bgcolor;
 }
 
 // **********************************************************************
