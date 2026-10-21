@@ -457,12 +457,14 @@ SVGPlot.Plot = function( inparams = {} )
     this._defaultlimits = [...this.params.defaultlimits];
     this._zoommode = this.params.zoommode;
     this._redrawonaddpoint = false;
+    this.lastwidth = null;
+    this.lastheight = null;
 
     var self = this;
 
     this.resizeobs = new ResizeObserver(
         function( entries, observer ) {
-            self.redraw();
+            self.redraw( null, true );
         }
     );
     this.resizeobs.observe( this.div );
@@ -779,9 +781,46 @@ SVGPlot.Plot.prototype.calc_autoscale = function()
 
 // **********************************************************************
 
-SVGPlot.Plot.prototype.redraw = function( width=null )
+SVGPlot.Plot.prototype.redraw = function( width=null, only_if_resized=false )
 {
     let self = this;
+
+    var height = null;
+    if ( width == null ) {
+        let divstyle = window.getComputedStyle( this.div );
+
+        let fullwid = parseFloat( divstyle.getPropertyValue( "width" ) );
+        // If we get a NaN here, just give up
+        if ( isNaN( fullwid ) ) return
+        let blw = parseFloat( divstyle.getPropertyValue( "border-left-width" ) );
+        let brw = parseFloat( divstyle.getPropertyValue( "border-right-width" ) );
+        let plw = parseFloat( divstyle.getPropertyValue( "padding-left" ) );
+        let prw = parseFloat( divstyle.getPropertyValue( "padding-right" ) );
+        let wid = fullwid - blw - brw - plw - prw;
+
+        let fullhei = parseFloat( divstyle.getPropertyValue( "height" ) );
+        let btw = parseFloat( divstyle.getPropertyValue( "border-top-width" ) );
+        let bbw = parseFloat( divstyle.getPropertyValue( "border-bottom-width" ) );
+        let ptw = parseFloat( divstyle.getPropertyValue( "padding-top" ) );
+        let pbw = parseFloat( divstyle.getPropertyValue( "padding-bottom" ) );
+        let hei = fullhei - btw - bbw - ptw -pbw;
+
+        let heifromwid = Math.round( wid * this.params.height / this.params.width );
+        if ( heifromwid > hei ) {
+            height = hei;
+            width = Math.round( height * this.params.width / this.params.height );
+        } else {
+            width = wid;
+            hei = heifromwid;
+        }
+    } else {
+        height = Math.round( width * this.params.height / this.params.width );
+    }
+    if ( ( only_if_resized ) && ( width == this.lastwidth ) && ( height == this.lastheight ) )
+        return;
+    this.lastwidth = width;
+    this.lastheight = height;
+
     while ( this.svg.firstChild) this.svg.removeChild( this.svg.firstChild );
 
     var rect;
@@ -836,36 +875,6 @@ SVGPlot.Plot.prototype.redraw = function( width=null )
     }
 
     var svg = this.svg
-
-    var height = null;
-    if ( width == null ) {
-        var divstyle = window.getComputedStyle( this.div );
-
-        var fullwid = parseFloat( divstyle.getPropertyValue( "width" ) );
-        var blw = parseFloat( divstyle.getPropertyValue( "border-left-width" ) );
-        var brw = parseFloat( divstyle.getPropertyValue( "border-right-width" ) );
-        var plw = parseFloat( divstyle.getPropertyValue( "padding-left" ) );
-        var prw = parseFloat( divstyle.getPropertyValue( "padding-right" ) );
-        var wid = fullwid - blw - brw - plw - prw;
-
-        var fullhei = parseFloat( divstyle.getPropertyValue( "height" ) );
-        var btw = parseFloat( divstyle.getPropertyValue( "border-top-width" ) );
-        var bbw = parseFloat( divstyle.getPropertyValue( "border-bottom-width" ) );
-        var ptw = parseFloat( divstyle.getPropertyValue( "padding-top" ) );
-        var pbw = parseFloat( divstyle.getPropertyValue( "padding-bottom" ) );
-        var hei = fullhei - btw - bbw - ptw -pbw;
-
-        var heifromwid = Math.round( wid * this.params.height / this.params.width );
-        if ( heifromwid > hei ) {
-            height = hei;
-            width = Math.round( height * this.params.width / this.params.height );
-        } else {
-            width = wid;
-            hei = heifromwid;
-        }
-    } else {
-        height = Math.round( width * this.params.height / this.params.width );
-    }
 
     this.svg.setAttribute( "width", width );
     this.svg.setAttribute( "height", height );
