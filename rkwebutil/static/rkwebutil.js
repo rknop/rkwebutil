@@ -8,6 +8,8 @@
 
 var rkWebUtil = {}
 
+rkWebUtil.ordinal = 0;
+
 // **********************************************************************
 // **********************************************************************
 // **********************************************************************
@@ -22,23 +24,25 @@ rkWebUtil.wipeDiv = function( div )
 
 // **********************************************************************
 
+rkWebUtil._elemaker_default_props = { id: null,
+                                      text: null,
+                                      dblclick: null,
+                                      click: null,
+                                      change:null,
+                                      classes: [],
+                                      style: {},
+                                      attributes: {},
+                                      svg: false
+                                    };
+
 rkWebUtil.elemaker = function( elemtype, parent, inprops={} )
 {
-    var default_props = { id: null,
-                          text: null,
-                          dblclick: null,
-                          click: null,
-                          change:null,
-                          classes: null,
-                          attributes: null,
-                          style: null,
-                          svg: false };
     let props = {};
     if ( typeof inprops === 'string' ) {
-        Object.assign( props, inprops );
+        Object.assign( props, rkWebUtil._elemaker_default_props );
         props.text = inprops;
     } else {
-        rkWebUtil.paramParser( default_props, inprops, props,
+        rkWebUtil.paramParser( rkWebUtil._elemaker_default_props, inprops, props,
                                { "alert_prefix": "Unknown parameters passed to elemaker: " } );
     }
 
@@ -49,8 +53,16 @@ rkWebUtil.elemaker = function( elemtype, parent, inprops={} )
     if ( ( elemtype == "text" ) && ( ! props.svg ) ) {
         let badprops = [];
         for ( let field of Object.keys(props) ) {
-            if ( ( field != "text" ) && ( field != "svg" ) && ( props[field] != null ) )
+            if ( (field == "text") || (field == "svg") ||
+                 ( ( (field == "attributes") || (field == "style") )
+                     && (Object.keys(props.attributes).length == 0) ) ||
+                 ( (field == "classes") && (props.classes.length == 0) )
+               ) {
+                continue;
+            }
+            else if ( props[field] != null ) {
                 badprops.push( field );
+            }
         }
         if ( badprops.length > 0 )
             throw new Error( "Can't set anything other than text for text nodes; " +
@@ -81,27 +93,16 @@ rkWebUtil.elemaker = function( elemtype, parent, inprops={} )
             elem.addEventListener( eventname, props[eventname] );
     }
 
-    if ( props.classes != null ) {
-        for ( let classname of props.classes ) {
-            elem.classList.add( classname )
-        }
+    for ( let attr of Object.keys(props.attributes) ) {
+        elem.setAttribute( attr, props.attributes[attr] );
+    }
+    for ( let classname of props.classes ) {
+        elem.classList.add( classname )
+    }
+    for ( let sty of Object.keys(props.style) ) {
+        elem.style[sty] = props.style[sty];
     }
 
-    if ( props.attributes != null ) {
-        for ( let attr in props.attributes ) {
-            if ( props.attributes.hasOwnProperty( attr ) ) {
-                elem.setAttribute( attr, props.attributes[attr] );
-            }
-        }
-    }
-
-    if ( props.style != null ) {
-        for ( let sty in props.style ) {
-            if ( props.style.hasOwnProperty( sty ) ) {
-                elem.style[sty] = props.style[sty];
-            }
-        }
-    }
     return elem;
 }
 
@@ -113,10 +114,8 @@ rkWebUtil.button = function( parent, title, callback, classes=null, attributes=n
     button.setAttribute( "type", "button" );
     button.setAttribute( "value", title );
     if ( attributes != null ) {
-        for ( let attr in attributes ) {
-            if ( attributes.hasOwnProperty( attr ) ) {
-                button.setAttribute( attr, attributes[attr] );
-            }
+        for ( let attr of Object.keys(attributes) ) {
+            button.setAttribute( attr, attributes[attr] );
         }
     }
     if ( classes != null ) {
@@ -132,6 +131,42 @@ rkWebUtil.button = function( parent, title, callback, classes=null, attributes=n
 rkWebUtil.text = function( parent, text )
 {
     return rkWebUtil.elemaker( "text", parent, { "text": text } );
+}
+
+rkWebUtil.checkbox = function( parent=null, inprops={}, returnlabel=false )
+{
+    let props = {};
+    if ( typeof inprops === 'string' ) {
+        Object.assign( props, rkWebUtil._elemaker_default_props  );
+        props.text = inprops;
+    } else {
+        rkWebUtil.paramParser( rkWebUtil._elemaker_default_props, inprops, props,
+                               { "alert_prefix": "Unknown parameters passed to rkWebUtil.checkbox" } );
+    }
+    props.attributes.type = "checkbox";
+
+    if ( props.text != null ) {
+        let text = props.text;
+        props.text = null;
+        if ( props.id == null ) {
+            props.id = "_rkwebutil_widget_" + rkWebUtil.ordinal;
+            rkWebUtil.ordinal += 1;
+        }
+        let checkbox = rkWebUtil.elemaker( "input", parent, props );
+        props.attributes['for'] = props.id;
+        props.id = null;
+        props.text = text;
+        delete props.attributes.type;
+        if ( props.attributes.hasOwnProperty("checked" ) ) delete props.attributes.checked;
+        let label = rkWebUtil.elemaker( "label", parent, props );
+        if (returnlabel )
+            return [ checkbox, label ];
+        else
+            return checkbox;
+    }
+    else {
+        return rkWebUtil.elemaker( "input", parent, props );
+    }
 }
 
 // **********************************************************************
