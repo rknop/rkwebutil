@@ -526,81 +526,128 @@ rkWebUtil.parseDateAsUTC = function( datestring )
 
 // **********************************************************************
 
-rkWebUtil.dateFormat = function(date)
+rkWebUtil.dateFormat = function(date, space_not_t=false, strip_z=false )
 {
-    // console.log(" Trying to format date " + date );
-    var result = "";
-    result += ("0000" + date.getFullYear().toString()).substr(-4, 4);
-    result += "-";
-    result += ("00" + (date.getMonth()+1).toString()).substr(-2, 2);
-    result += "-";
-    result += ("00" + date.getDate().toString()).substr(-2, 2);
-    result += " ";
-    result += ("00" + date.getHours().toString()).substr(-2, 2);
-    result += ":";
-    result += ("00" + date.getMinutes().toString()).substr(-2, 2);
-    result += ":";
-    result += ("00" + date.getSeconds().toString()).substr(-2, 2);
-    return result;
+    if ( date instanceof Date ) {
+        date = date.toTemporalInstant();
+    }
+    else if ( date instanceof String ) {
+        date = rkWebUtil.dateToInstant( date );
+    }
+    else if ( ! date instanceof Temporal.Instant ) {
+        window.alert( f"Error: rkWebUtil.dateFormat requires a Temporal.Instant, Date, or String." );
+        return;
+    }
+
+    let datestr = date.toString();
+    if ( space_not_t ) datestr.replace( 'T', ' ' );
+    if ( strip_z ) datestr.replace( 'Z', '' );
+    return datestr;
+
+    // // console.log(" Trying to format date " + date );
+    // var result = "";
+    // result += ("0000" + date.getFullYear().toString()).substr(-4, 4);
+    // result += "-";
+    // result += ("00" + (date.getMonth()+1).toString()).substr(-2, 2);
+    // result += "-";
+    // result += ("00" + date.getDate().toString()).substr(-2, 2);
+    // result += " ";
+    // result += ("00" + date.getHours().toString()).substr(-2, 2);
+    // result += ":";
+    // result += ("00" + date.getMinutes().toString()).substr(-2, 2);
+    // result += ":";
+    // result += ("00" + date.getSeconds().toString()).substr(-2, 2);
+    // return result;
 }
 
 rkWebUtil.dateUTCFormat = function(date)
 {
-    var result = "";
-    result += ("0000" + date.getUTCFullYear().toString()).substr(-4, 4);
-    result += "-";
-    result += ("00" + (date.getUTCMonth()+1).toString()).substr(-2, 2);
-    result += "-";
-    result += ("00" + date.getUTCDate().toString()).substr(-2, 2);
-    result += " ";
-    result += ("00" + date.getUTCHours().toString()).substr(-2, 2);
-    result += ":";
-    result += ("00" + date.getUTCMinutes().toString()).substr(-2, 2);
-    result += ":";
-    result += ("00" + date.getUTCSeconds().toString()).substr(-2, 2);
-    return result;
+    console.log( "WARNING: rkWebUtil.dateUTCFormat is deprecated, just use rkWebUtil.dateFormat" );
+    return rkWebUtil.dateFormat( date );
+    // var result = "";
+    // result += ("0000" + date.getUTCFullYear().toString()).substr(-4, 4);
+    // result += "-";
+    // result += ("00" + (date.getUTCMonth()+1).toString()).substr(-2, 2);
+    // result += "-";
+    // result += ("00" + date.getUTCDate().toString()).substr(-2, 2);
+    // result += " ";
+    // result += ("00" + date.getUTCHours().toString()).substr(-2, 2);
+    // result += ":";
+    // result += ("00" + date.getUTCMinutes().toString()).substr(-2, 2);
+    // result += ":";
+    // result += ("00" + date.getUTCSeconds().toString()).substr(-2, 2);
+    // return result;
 }
 
-rkWebUtil.validateWidgetDate = function( datestr ) {
-    return rkWebUtil._actually_validateWigetDate( datestr, false );
+rkWebUtil.dateToInstant = function( datestr ) {
+    // Alas, Javascript doesn't have something built-in that works like
+    //   python-dateutil, and I don't want to start importing packages.
+    //   So, do some pre parsing.
+    const dateparse = new RegExp( String.raw`^\s*(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})` +
+                                  String.raw`(?<t>\s*[T\s]\s*` +
+                                  String.raw`(?<h>\d{1-2})(?<hasn>:(?<n>\d{1-2}))?(?<hass>:?(<s>\d{1-2}))?)?` +
+                                  String.raw`\s*(?<tz>UTC|Z|(?<pm>[+\-])(?<tzh>\d{1-2})(:?(?<tzm>\d{1-2})))?\s*$` );
+    let t = dateparse.exec( datestr );
+    if ( t == null ) {
+        window.alert( "Error parsing date " + datestr + "; must be \"yyyy-mm-dd\" or \"yyyy-mm-dd hh:mm:ss\" " +
+                      "or \"yyyy-mm-ddThh:mm:ss\" with, optionally, one of \"UTC\", \"Z\", or \"+00:00\" " +
+                      "at the end, where + could be - and 00:00 can be any hh:mm timezone offset." );
+    }
+    let tzmess = t.groups.tz;
+    let tz = '+00:00'
+    if ( ( tzmess == null ) || ( tzmess == 'UTC' ) || ( tzmess == 'Z' ) ) {
+        tz = '+00:00';
+    }
+    else {
+        tz = ( t.groups.pm + t.groups.tzh.toString().padStart(2, '0') + ":" +
+               ( t.groups.tzm == null ? "00" : t.groups.tzm.toString().padStart(2, '0') ) )
+    }
+    let fixeddatestr = ( t.groups.y.toString().padStart(4, '0') + '-' +
+                         t.groups.m.toString().padStart(2, '0') + '-' +
+                         t.groups.d.toString().padStart(2, '0') + 'T' +
+                         ( t.groups.t == null ? "00:00:00" :
+                           ( t.groups.h.toString().padStart(2, '0') + ':' +
+                             ( t.groups.hasn == null ? "00" : t.groups.n.toString().padStart(2, '0') ) + ':' +
+                             ( t.groups.hass == null ? "00" : t.groups.s.toSTring().padStart(2, '0') )
+                           )
+                         )
+                         + tz );
+    return Temporal.Instant.from( fixeddatestr );
 }
 
-rkWebUtil.validateWidgetDateUTC = function( datestr ) {
-    return rkWebUtil._actually_validateWidgetDate( datestr, true );
-}
+rkWebUtil.validateWidgetDate = function( datewid, space_not_t=true, strip_z=true ) {
+    datewid.value = rkWebUtil.dateFormat( datewid.value, space_not_t, strip_z );
 
+    // if ( datestr.value.trim() == "" ) {
+    //     datestr.value = ""
+    //     return;
+    // }
+    // let munged = datestr.value.trim()
+    // if ( assumeutc ) {
+    //     if ( ( munged.substring( munged.length-1 ) != 'Z' ) &&
+    //          ( munged.substring( munged.length-3 ) != 'UTC' )
+    //        ) {
+    //         munged += " UTC";
+    //     }
+    // }
 
-rkWebUtil._actually_validateWidgetDate = function( datestr, assumeutc ) {
-    if ( datestr.value.trim() == "" ) {
-        datestr.value = ""
-        return;
-    }
-    let munged = datestr.value.trim()
-    if ( assumeutc ) {
-        if ( ( munged.substring( munged.length-1 ) != 'Z' ) &&
-             ( munged.substring( munged.length-3 ) != 'UTC' )
-           ) {
-            munged += " UTC";
-        }
-    }
-
-    let num = Date.parse( munged );
-    if ( isNaN(num) ) {
-        window.alert( "Error parsing date " + datestr.value
-                      + "\nNote that Javascript's Date.parse() doesn't seem to like AM or PM at the end; "
-                      + "use 24-hour time." );
-        return;
-    }
-    let date = new Date();
-    date.setTime( num );
-    // TODO : verify that both Firefox and Chrome (at least) parse this right
-    // (I don't just use toISOString because the T at the middle and all the precision is ugly for the user)
-    datestr.value = date.getUTCFullYear() + "-"
-        + String(date.getUTCMonth()+1).padStart( 2, '0') + "-"
-        + String(date.getUTCDate()).padStart( 2, '0' ) + " "
-        + String(date.getUTCHours()).padStart( 2, '0') + ":"
-        + String(date.getUTCMinutes()).padStart(2, '0') + ":"
-        + String(date.getUTCSeconds()).padStart( 2, '0') + "+00";
+    // let num = Date.parse( munged );
+    // if ( isNaN(num) ) {
+    //     window.alert( "Error parsing date " + datestr.value
+    //                   + "\nNote that Javascript's Date.parse() doesn't seem to like AM or PM at the end; "
+    //                   + "use 24-hour time." );
+    //     return;
+    // }
+    // let date = new Date();
+    // date.setTime( num );
+    // // TODO : verify that both Firefox and Chrome (at least) parse this right
+    // // (I don't just use toISOString because the T at the middle and all the precision is ugly for the user)
+    // datestr.value = date.getUTCFullYear() + "-"
+    //     + String(date.getUTCMonth()+1).padStart( 2, '0') + "-"
+    //     + String(date.getUTCDate()).padStart( 2, '0' ) + " "
+    //     + String(date.getUTCHours()).padStart( 2, '0') + ":"
+    //     + String(date.getUTCMinutes()).padStart(2, '0') + ":"
+    //     + String(date.getUTCSeconds()).padStart( 2, '0') + "+00";
 }
 
 rkWebUtil.mjdOfDate = function( date ) {
