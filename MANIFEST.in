@@ -1,0 +1,2 @@
+include rkwebutil/static/*.js
+include rkwebutil/static/*.css

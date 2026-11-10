@@ -11,5 +11,32 @@
 <div id="main-div">
 <p><input id="mjd" value="" size=20 /><button id="convmjd">Convert MJD to Date</button></p>
 <p><input id="date" value="" size=20 /><button id="convdate">Convert Date to MJD</button> (YYYY-MM-DDTHH:MM:SSZ)</p>
+
+<p><input id="datestr" value="" size=24 /><button id="parsedatestr">Parse</button></p>
+<table>
+  <tr><th>Via</th><th>No Space, Z</th><th>Space, Z</th><th>No Space, No Z</th><th>Space, No Z</th></tr>
+  <tr>
+    <th>Temporal.Instant</th>
+    <td><input id="datestr_nospace_z" size="24" readonly /></td>
+    <td><input id="datestr_space_z" size="24" readonly /></td>
+    <td><input id="datestr_nospace_noz" size="24" readonly /></td>
+    <td><input id="datestr_space_noz" size="24" readonly /></td>
+  </tr>
+  <tr>
+    <th>Date</th>
+    <td><input id="datestr_nospace_z_date" size="24" readonly /></td>
+    <td><input id="datestr_space_z_date" size="24" readonly /></td>
+    <td><input id="datestr_nospace_noz_date" size="24" readonly /></td>
+    <td><input id="datestr_space_noz_date" size="24" readonly /></td>
+  </tr>
+  <tr>
+    <th>String</th>
+    <td><input id="datestr_nospace_z_str" size="24" readonly /></td>
+    <td><input id="datestr_space_z_str" size="24" readonly /></td>
+    <td><input id="datestr_nospace_noz_str" size="24" readonly /></td>
+    <td><input id="datestr_space_noz_str" size="24" readonly /></td>
+  </tr>
+</table>
+
 </div>
 {% endblock %}

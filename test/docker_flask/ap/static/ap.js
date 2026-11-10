@@ -19,6 +19,24 @@ exampleap.prototype.init = function() {
     this.statusdiv = document.getElementById( "status-div" );
     this.maindiv = document.getElementById( "main-div" );
     rkWebUtil.elemaker( "p", this.maindiv, { "text": "text so selenium displays the main div" } )
+
+    // ****
+    // TEMPORARY HACK ALERT FOR INTERACTIVE DEBUGGING
+    let p = rkWebUtil.elemaker( "p", this.maindiv )
+    this.datetimewid = rkWebUtil.elemaker( "input", p, { 'change': (e) =>
+        { let t = rkWebUtil.dateToInstant( self.datetimewid.value );
+          self.datetimeparsed.value = rkWebUtil.dateFormat( t );
+          self.datetimespace.value = rkWebUtil.dateFormat( t, true );
+          self.datetimenoz.value = rkWebUtil.dateFormat( t, false, true );
+          self.datetimespacenoz.value = rkWebUtil.dateFormat( t, true, true );
+        } }
+    );
+    this.datetimeparsed = rkWebUtil.elemaker( "input", p, { "attributes": { "width": 24, "readonly": 1 } } );
+    this.datetimespace = rkWebUtil.elemaker( "input", p, { "attributes": { "width": 24, "readonly": 1 } } );
+    this.datetimenoz = rkWebUtil.elemaker( "input", p, { "attributes": { "width": 24, "readonly": 1 } } );
+    this.datetimespacenoz = rkWebUtil.elemaker( "input", p, { "attributes": { "width": 24, "readonly": 1 } } );
+    // ****
+
     if ( this.statusdiv == null ) {
         window.alert( "Couldn't find status div!  This should never happen." );
         return;
