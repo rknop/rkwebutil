@@ -475,7 +475,8 @@ rkWebUtil.fixDateString = function( datestr, assume_utc=true, no_alert=false )
     //   maybe for IE.
     const dateparse = new RegExp( String.raw`^\s*(?<y>\d{1,4})-(?<m>\d{1,2})-(?<d>\d{1,2})` +
                                   String.raw`(?<t>\s*[T\s]\s*` +
-                                  String.raw`(?<h>\d{1,2})(?<hasn>:(?<n>\d{1,2}))?(?<hass>:(?<s>\d{1,2}))?)?` +
+                                  String.raw`(?<h>\d{1,2})(?<hasn>:(?<n>\d{1,2}))?` +
+                                  String.raw`(?<hass>:(?<s>\d{1,2}(\.\d*)?))?)?` +
                                   String.raw`\s*(?<tz>UTC|Z|(?<pm>[+\-])((?<tzh>\d{1,2}):?(?<tzm>\d{1,2})?))?\s*$` );
     // (...and now I have two problems...)
     let t = dateparse.exec( datestr );
@@ -520,13 +521,35 @@ rkWebUtil.dateToInstant = function( datestr, no_alert=false )
     //   it a timezone, asString() puts it in UTC (with a Z).
     // OMG NOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO!!!!!!!!!!!!!!!!!!!!!!!!!!!
     //   Safari doesn't support Temporal yet.  STUPID APPLE I HATE YOU AND THE YAK YOU RODE IN ON.
-    return Temporal.Instant.from( rkWebUtil.fixDateString( datestr, true, no_alert ) );
+    if ( datestr instanceof Temporal.Instant ) {
+        return datestr;
+    }
+    else if ( datestr instanceof Date ) {
+        return date.toTemporalInstant();
+    }
+    else if ( ( typeof datestr == "string" ) || ( datestr instanceof String ) ) {
+        return Temporal.Instant.from( rkWebUtil.fixDateString( datestr, true, no_alert ) );
+    }
+    else {
+        window.alert( "Unknown type " + typeof datestr + ", cannot convert to Temporal.Instant." )
+    }
 }
 
 
 rkWebUtil.dateToDate = function( datestr, no_alert=false )
 {
-    return new Date( Date.parse( rkWebUtil.fixDateString( datestr, true, no_alert ) ) );
+    if ( datestr instanceof Date ) {
+        return datestr;
+    }
+    else if ( ( typeof datestr == "string" ) || ( datestr instanceof String ) ) {
+        return new Date( Date.parse( rkWebUtil.fixDateString( datestr, true, no_alert ) ) );
+    }
+    else if ( datestr instanceof Temporal.Instant ) {
+        return new Date( datestr.epochMilliseconds );
+    }
+    else {
+        window.alert( "Unknown type " + typeof datestr + ", cannot convert to Date." );
+    }
 }
 
 
@@ -565,17 +588,8 @@ rkWebUtil.parseDateAsUTC = function( datestring )
 rkWebUtil.dateFormat = function(date, space_not_t=false, strip_z=false, no_alert=false )
 {
     // ...make this the implementation once Temporal.Instant is supported on Safari and iOS
-    // if ( date instanceof Date ) {
-    //     date = date.toTemporalInstant();
-    // }
-    // else if ( ( typeof date == 'string' ) || ( date instanceof String ) ) {
-    //     date = rkWebUtil.dateToInstant( date );
-    // }
-    // else if ( ! ( date instanceof Temporal.Instant ) ) {
-    //     window.alert( "Error: rkWebUtil.dateFormat requires a Temporal.Instant, Date, or String." );
-    //     return;
-    // }
-
+    // date = rkWebUtil.dateToInstant( date );
+    //
     // let datestr = date.toString();
     // if ( space_not_t ) datestr = datestr.replace( 'T', ' ' );
     // if ( strip_z ) datestr = datestr.replace( 'Z', '' );
@@ -620,11 +634,17 @@ rkWebUtil.dateUTCFormat = function( date, space_not_t=false, strip_z=false )
 }
 
 
-rkWebUtil.validateWidgetDate = function( datewid, space_not_t=true, strip_z=true ) {
-    datewid.value = rkWebUtil.dateFormat( datewid.value, space_not_t, strip_z );
+rkWebUtil.validateWidgetDate = function( datewid, space_not_t=true, strip_z=true, emptyok=true ) {
+    let datestr = datewid.value.trim();
+    if ( datestr.length == 0 ) {
+        if ( ! emptyok ) window.alert( "Empty date/time" );
+        return
+    }
+    datewid.value = rkWebUtil.dateFormat( datestr, space_not_t, strip_z );
 }
 
-rkWebUtil.mjdOfDate = function( date ) {
+rkWebUtil.mjdOfDate = function( date, no_alert=false ) {
+    date = rkWebUtil.dateToDate( date, no_alert=no_alert );
     let y = date.getUTCFullYear();
     let m = date.getUTCMonth() + 1;
     let d = date.getUTCDate();
