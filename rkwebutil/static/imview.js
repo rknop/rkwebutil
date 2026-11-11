@@ -537,7 +537,30 @@ class ImView {
         this.last_dispheight = null;
         this.resize_observer = new ResizeObserver( (wids) => { self.resized( wids ); } );
         this.resize_observer.observe( this.canvasdiv );
-        // Make sure it's always called at least once so dispwidth and dispheight get initialized.
+
+        // A redraw event.  Have to do this because we can't always
+        //   directly call the redraw inside functions.  E.g., calling
+        //   redraw inside the resize observer's callback will change
+        //   the size of the thing the observer was observing, which
+        //   causes confusion and chaos and people running around waving
+        //   their hands aroundover their heads... and also seems to
+        //   stop subsequent resize events from getting .  Instead,
+        //   trigger an event so the resize happens once the execution
+        //   thread isn't in the middle of something else.
+        this.redraw_event = new CustomEvent( 'redraw-' + this.name,
+                                             { 'detail': { 'render_regions': true } } );
+        this.redraw_event_no_regions = new CustomEvent( 'redraw-' + this.name + '-no-regions',
+                                                        { 'detail': { 'render_regions': false } } );
+        document.addEventListener( 'redraw-' + this.name,
+                                   (e) => {
+                                       self._render_image(true);
+                                   } );
+        document.addEventListener( 'redraw-' + this.name + '-no-regions',
+                                   (e) => {
+                                       self._render_image(false);
+                                   } );
+
+        // Trigger a resize event so dispwidth and dispheight get initialized.
         // This isn't necessary if this.parent_div is null, because the resize event *should*
         //   be triggered when this.div is appendChilded to something.  However, if this.parentdiv
         //   is not null, we appendChilded above before we had created this resize observer.
@@ -818,6 +841,7 @@ class ImView {
                                 }, "div" );
         defaultstyle( "canvaswrapper", { "position": "relative",
                                          "flex-grow": 1,
+                                         "flex-shrink": 1,
                                          "margin": 0,
                                          "padding": 0,
                                          "border": 0 }, "div" );
@@ -957,16 +981,32 @@ class ImView {
     }
 
     resized( wids ) {
-        if ( wids.length != 1 ) {
-            window.alert( "I am surprised." );
-            throw new Error( "I don't understand ResizeObserver." );
+        let wid = null;
+        for ( let checkwid of wids ) {
+            if ( checkwid.target == this.canvasdiv ) {
+                wid = checkwid;
+                break;
+            }
         }
-        let wid = wids[0];
-        this.dispwidth = Math.floor( wid.contentBoxSize[0].inlineSize );
-        this.dispheight = Math.floor( wid.contentBoxSize[0].blockSize );
-        if ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight) ) {
-            this.render_image();
+        if ( wid != null ) {
+            this.dispwidth = Math.floor( wid.contentBoxSize[0].inlineSize );
+            this.dispheight = Math.floor( wid.contentBoxSize[0].blockSize );
+        } else {
+            window.alert( "Rob needs to understand CSS and ResizeObserver.  Good luck." );
+            throw new Error( "Rob needs to understand CSS and ResizeObserver.  Good luck." );
+            // let style = window.getComputedStyle( this.canvasdiv );
+            // let padx = parseFloat( style.paddingLeft ) + parseFloat( style.paddingRight );
+            // let pady = parseFloat( style.paddingTop ) + parseFloat( style.paddingBottom );
+            // this.dispwidh = Math.floor( this.canvasdiv.clientWidth - padx );
+            // this.dispheight = Math.floor( this.canvasdiv.clientHeight - pady );
         }
+
+        // if ( ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight) ) {
+        //     this.render_image();
+        // }
+        // I haven't figured out ResizeObserver well enough to do the right thing.  So, always render,
+        //   even if it turns out it's not necessary.
+        this.render_image();
     }
 
     blank_canvas() {
@@ -991,6 +1031,15 @@ class ImView {
 
     render_image( render_regions=true )
     {
+        if ( render_regions )
+            document.dispatchEvent( this.redraw_event );
+        else
+            document.dispatchEvent( this.redraw_event_no_regions );
+    }
+
+    // Don't call this directly unless you know what you're doing.
+    _render_image( render_regions=true )
+    {
         let self = this;
         let message = this._message;
         let message_classes = Array.from( this._message_classes );
@@ -1006,7 +1055,11 @@ class ImView {
             }
         }
 
-        let resized = ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight );
+        // let resized = ( this.dispwidth != this.last_dispwidth ) || ( this.dispheight != this.last_dispheight );
+        // Arg.  Haven't figured out how to get the resizeobserver stuff working right, so redraw
+        //   too often here to make sure it happens.
+        // (The bug may be with my last_dispwidth etc. handling, not sure.  It's irritating, whatever it is.)
+        let resized = true
         if ( resized || ( this.canvas == null ) || ( this.svg == null ) )
             this.make_canvas_and_svg();
 
@@ -1148,9 +1201,9 @@ class ImView {
             if ( image.init_scale === null ) image.init_scale = image.scale;
             if ( image.init_x0 === null ) image.init_x0 = image.x0;
             if ( image.init_y0 === null ) image.init_y0 = image.y0;
-            this.last_dispwidth = this.dispwidth;
-            this.last_dispheight = this.dispheight;
         }
+        this.last_dispwidth = this.dispwidth;
+        this.last_dispheight = this.dispheight;
 
         if ( ! this.canvas.hasAttribute( 'data-imview-listeners' ) ) {
             this.canvas.addEventListener( "mousedown", (e) => { self.mousedown(e) } );

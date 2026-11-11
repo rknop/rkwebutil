@@ -1074,6 +1074,11 @@ rkWebUtil.paramParser = function( default_params, params, target, in_parser_para
 //
 //       * tableclasses : list: CSS class names to assign to the table as a whole
 //
+//       * headerrowclasses : list of CSS class names to assign to the th elements of the header row
+//
+//       * headerlinkclass : a (single) "link" class for indicating things will happen
+//            if you click on one of the titles in the header row, defaults to "link".
+//
 //       * colorclasses : a list of CSS class names, which are intended to hold
 //         background color styling.
 //
@@ -1088,8 +1093,6 @@ rkWebUtil.paramParser = function( default_params, params, target, in_parser_para
 //         is first instantiated, and every time the table is sorted.
 //         Arguments are (table, ths), where table is the table document
 //         element, and ths is a list of existing table headers.
-//
-// Depends on there being a "link" css class
 
 rkWebUtil.SortableTable = class
 {
@@ -1102,6 +1105,8 @@ rkWebUtil.SortableTable = class
                       'nosortfields': [],
                       'initsort': [],
                       'tableclasses': [],
+                      'headerrowclasses': [],
+                      'headerlinkclass': 'link',
                       'colorclasses': [],
                       'colorlength': 3,
                       'headercallback': null,
@@ -1135,6 +1140,8 @@ rkWebUtil.SortableTable = class
         this.nosortfields = props.nosortfields;
         this.sortfields = [...props.initsort];
         this.tableclasses = [...props.tableclasses];
+        this.headerrowclasses = [...props.headerrowclasses];
+        this.headerlinkclass = props.headerlinkclass;
         this.colorclasses = [...props.colorclasses];
         this.colorlength = props.colorlength;
         this.headercallback = props.headercallback;
@@ -1178,7 +1185,7 @@ rkWebUtil.SortableTable = class
 
         let tr = rkWebUtil.elemaker( "tr", this.table );
         for ( let field of this.fields ) {
-            let th = rkWebUtil.elemaker( "th", tr );
+            let th = rkWebUtil.elemaker( "th", tr, { "classes": this.headerrowclasses } );
             if ( this.nosortfields.indexOf( field ) >= 0 ) {
                 rkWebUtil.elemaker( "text", th, { "text": this.hdrs[field] } );
             } else {
@@ -1189,7 +1196,7 @@ rkWebUtil.SortableTable = class
                         self.resort_rows( field, true );
                 };
                 let span = rkWebUtil.elemaker( "span", th, { "text": this.hdrs[field],
-                                                             "classes": [ "link" ],
+                                                             "classes": self.headerlinkclass,
                                                              "click": clickfunc } );
                 let sortdex = self.sortfields.indexOf( '+' + field );
                 if ( sortdex == 0 ) {
@@ -1652,6 +1659,14 @@ rkWebUtil.commafyInt = function( val )
 //
 // Properties:
 //   div : the overall div of the elemnt
+//   divs : a dict of tabname → div element for the content divs
+//
+// Creates document element structure:
+//    this.div  [ class list from params.tabdivcss, default [ 'tabdiv' ] ]
+//       this.buttonbox  [ class list from params.buttonboxdivcss, default [ 'buttonboxdiv' ]
+//       this.tabcontentdiv  [ class list from params.tabcontentdivcss, default [ 'tabcontetdivcss' ]
+//          this.divs[ currenttab ]   [ currenttab is the name given to the first parameter of addTab,
+//                                      the div is what was passed to the third parameter of addTab ]
 
 rkWebUtil.Tabbed = function( parentdiv, params ) {
     this.hbox = 'hbox';
@@ -1673,6 +1688,11 @@ rkWebUtil.Tabbed = function( parentdiv, params ) {
     this.div = rkWebUtil.elemaker( "div", parentdiv, { "classes": this.tabdivcss } );
     this.buttonbox = rkWebUtil.elemaker( "div", this.div, { "classes": this.buttonboxdivcss } );
     this.tabcontentdiv = rkWebUtil.elemaker( "div", this.div, { "classes": this.tabcontentdivcss } );
+}
+
+rkWebUtil.Tabbed.prototype.hasTab = function( tab )
+{
+    return this.tabs.includes( tab );
 }
 
 rkWebUtil.Tabbed.prototype.addTab = function( tab, buttontext, div, sel=false,
