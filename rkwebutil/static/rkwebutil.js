@@ -322,36 +322,47 @@ rkWebUtil.listener = class
 
 
 // **********************************************************************
+// A class that wraps a div element that resets to configurable
+//    boilerplate when reset.
+//
+// In inprops, pass a bool in 'empty' (default false), that, if true,
+//    means the div should start empty, and be empty when reset
+//    is called.  In this case, anything you pass in body, text,
+//    or textclasses is ignored.
+// Pass 'body' in inprops as a document element that should go into
+//    the element upon creation and when reset() is called.
+// If nothing is passed in 'body', then you can pass a string
+//    in the 'text' element of inprops that will be put in a p.
+//    If there is anything in 'textclasses', then those CSS classes
+//    are used for the p that holds the text.
+//
+// Everything else in inprops is passed along to rkWebUtil.ekelemaker
+//    when the div is made.
 
 rkWebUtil.EmptiableDiv = class
 {
     constructor( elemtype="div", parent=null, inprops={} )
     {
-        var props = { 'body': null,
-                      'text': null,
-                      'empty': false
+        var props = { 'empty': false,
+                      'body': null,
+                      'text': "(Nothing loaded)",
+                      'textclasses': []
                     };
         Object.assign( props, inprops );
 
-        if ( props.empty ) {
-            this.defaultbody = null;
-        }
-        else {
-            if ( props.body !== null ) {
-                this.defaultbody = props.body;
-            }
-            else {
-                let text = "(Nothing loaded)";
-                if ( props.text !== null ) text = props.text;
-                this.defaultbody = new rkWebUtil.elemaker( "p", null, { "text": text } );
-            }
+        this.defaultbody = props.empty ? null : props.body;
+
+        if ( ( ! props.empty ) && ( this.defaultbody == null ) ) {
+            this.defaultbody = new rkWebUtil.elemaker( "p", null, { "text": props.text,
+                                                                    "classes": props.textclasses } );
         }
         delete props.empty;
         delete props.body;
         delete props.text;
+        delete props.textclasses;
+
         this.div = rkWebUtil.elemaker( elemtype, parent, props );
-        props.body = this.defaultbody;
-        this.reset( props );
+        this.reset();
     }
 
     reset( inprops ) {
